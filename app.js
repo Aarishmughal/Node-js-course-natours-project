@@ -1,75 +1,50 @@
+/**
+ * Express application for the Natours API.
+ *
+ * - Loads tour data from a JSON file.
+ * - Provides RESTful endpoints to get all tours, get a tour by ID, create a new tour, and update a tour.
+ *
+ * Endpoints:
+ *   GET    /api/v1/tours         - Returns all tours.
+ *   GET    /api/v1/tours/:id     - Returns a single tour by ID.
+ *   POST   /api/v1/tours         - Creates a new tour.
+ *   PATCH  /api/v1/tours/:id     - Updates an existing tour (not yet implemented).
+ *   DELETE  /api/v1/tours/:id    - Deletes an existing tour (not yet implemented).
+ *
+ * @module app
+ * @requires express
+ * @requires fs
+ */
+
+// IMPORTS
 const express = require('express');
-const fs = require('fs');
+const morgan = require('morgan');
+const tourRouter = require('./routes/tourRoutes');
+const userRouter = require('./routes/userRoutes');
+
+// CONSTANTS
 const app = express();
 
-const PORT = 3000;
+// MIDDLEWARE(s)
+app.use(morgan('dev'));
 app.use(express.json());
-// app.get('/', (req, res) => {
-//   res
-//     .status(200)
-//     .json({ message: 'Hello from the server side!', app: 'Natours' });
-// });
 
-// app.post('/', (req, res) => {
-//   res
-//     .status(200)
-//     .json({ message: 'Post Request from Server!', app: 'Natours' });
-// });
-const tours = JSON.parse(
-  fs.readFileSync(`${__dirname}/dev-data/data/tours-simple.json`, 'utf-8')
-);
-app.get('/api/v1/tours', (req, res) => {
-  res.status(200).json({
-    status: 'success',
-    results: tours.length,
-    data: { tours },
-  });
-});
-app.get('/api/v1/tours/:id', (req, res) => {
-  const idToGet = Number(req.params.id);
-  //   if (idToGet > tours.length) {    // Check if idToGet is greater than Tours Count
-  const tour = tours.find((el) => el.id === idToGet);
-  if (!tour) {
-    z; // Check if tour (to get) actually exists or not
-    return res.status(404).json({
-      status: 'fail',
-      message: 'Invalid ID',
-    });
-  }
-
-  console.log(tour);
-  res.status(200).json({
-    status: 'success',
-    data: { tour },
-  });
-});
-app.post('/api/v1/tours', (req, res) => {
-  const newId = tours[tours.length - 1].id + 1;
-  const newTour = Object.assign({ id: newId }, req.body);
-  tours.push(newTour);
-
-  fs.writeFile(
-    `${__dirname}/dev-data/data/tours-simple.json`,
-    JSON.stringify(tours), // `tours` is a plain javascript object. We want to save it as JSON
-    (err) => {
-      if (err) {
-        console.log(err);
-        return res.status(500).json({
-          status: 'error',
-          message: 'Failed to save the new tour.',
-        });
-      }
-      console.log('New Tour Added!');
-      res.status(201).json({
-        status: 'success',
-        data: {
-          tour: newTour,
-        },
-      });
-    }
+app.use((req, res, next) => {
+  console.log(
+    'Hello from custom middleware!'
   );
+  next();
 });
 
-app.listen(PORT, () => {
-  console.log(`App is Listening on: ${PORT}`);
+app.use((req, res, next) => {
+  req.requestTime =
+    new Date().toISOString();
+  next();
 });
+
+// ROUTE(s)
+app.use('/api/v1/tours', tourRouter);
+app.use('/api/v1/users', userRouter);
+
+// GOING INTO SERVER.js
+module.exports = app;

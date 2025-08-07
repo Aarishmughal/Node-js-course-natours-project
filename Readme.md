@@ -1,15 +1,40 @@
-## Express.JS
+# Express.JS
 
 Express is a minimal Node.JS framework which means it is built on top of Node.JS. It allows us to develop applications much faster as it comes out-of-box with great features like:
 
-- handling complex routing
-- easier handling of requests
-- adding middleware
-- server-side rendering, etc.
+-   handling complex routing
+-   easier handling of requests
+-   adding middleware
+-   server-side rendering, etc.
 
 It also allows organizing the application into MVC architecture.
 
-### RESTful APIs
+## Table of Contents
+
+-   [RESTful APIs](#restful-apis)
+-   [Sending back Data Formatting: JSend](#sending-back-data-formatting-jsend)
+-   [Recieving Data from the Client: Middleware](#recieving-data-from-the-client-middleware)
+-   [Handling POST Data](#handling-post-data)
+-   [Sending and Handling Parameters](#sending-and-handling-parameters)
+-   [Refactoring Express Routes](#refactoring-express-routes)
+
+## Final File Structure
+
+```
+=> /controllers
+	==> /tourController.js
+	==> /userController.js
+=> /routes
+	==> /tourRoutes.js
+	==> /userRoutes.js
+=> /node_modules
+=> /app.js
+=> /server.js
+=> /packages.json
+=> /Readme.md
+```
+
+## RESTful APIs
 
 Some rules to follow when creating RESTful APIs:
 
@@ -41,96 +66,111 @@ GET: /users/{id}/tours ->  GOOD Example
 DELETE: /users/{id}/tours/{id} ->  GOOD Example
 ```
 
-### Sending back Data Formatting: JSend
+## Sending back Data Formatting: JSend
 
 1. Format the data into a variable using `JSON.parse()`.
-   ```javascript
-   const dataToSend = JSON.parse(
-     fs.readFileSync(`${__dirname}/.../tours-simple.json`, 'utf-8')
-   );
-   ```
+    ```javascript
+    const dataToSend = JSON.parse(
+    	fs.readFileSync(
+    		`${__dirname}/.../tours-simple.json`,
+    		'utf-8'
+    	)
+    );
+    ```
 2. Use the `.json()` method on `res` when sending back response.
 
-   - Example Use:
+    - Example Use:
 
-   ```javascript
-   res.status(200).json({
-     status: 'success',
-     data: { tours: dataToSend },
-   });
-   ```
+    ```javascript
+    res.status(200).json({
+    	status: 'success',
+    	data: { tours: dataToSend },
+    });
+    ```
 
-   _The key for the key-value pair in the `data` key, must always be equal to the API Resource Name._
+    _The key for the key-value pair in the `data` key, must always be equal to the API Resource Name._
 
 3. In ES6 JavaScript, we do not need to specify name and value of the key-value pair, iff they are the same.
-   ```javascript
-   //...
-   data: { tours: tours },
-   // IS EQUAL TO
-   data: { tours },
-   ```
+    ```javascript
+    //...
+    data: { tours: tours },
+    // IS EQUAL TO
+    data: { tours },
+    ```
 4. Good practice to include another key-value pair `results` as shown:
-   ```javascript
-   res.status(200).json({
-     status: 'success',
-     results: data.length,
-     data: {
-       //..
-     },
-   });
-   ```
+    ```javascript
+    res.status(200).json({
+    	status: 'success',
+    	results: data.length,
+    	data: {
+    		//..
+    	},
+    });
+    ```
 
-### Recieving Data from the Client: Middleware
+## Recieving Data from the Client: Middleware
 
 Middlware is basically a function that can modify the incoming Request Data. It's called middleware because it stands between in the middle of the request and the response.
 
-- Add a new `middleware` in the file.
-  ```javascript
-  //...
-  app.use(express.json());
-  //...
-  ```
+-   Add a new `middleware` in the file.
+    ```javascript
+    //...
+    app.use(express.json());
+    //...
+    ```
 
-### Handling POST Data
+## Handling POST Data
 
 1. Middleware is absolutely necessary to handle POST data. Follow previous section to setup middleware.
 2. After we have implemented middleware in our application, we now have access to the object `req.body`.
 3. Assign new ID as follows:
-   ```javascript
-   const newId = tours[tours.length - 1].id + 1; // Get ID of last Entry
-   const newTour = Object.assign({ id: newId }, req.body); // Create New Entry
-   ```
+    ```javascript
+    const newId =
+    	tours[tours.length - 1].id + 1; // Get ID of last Entry
+    const newTour = Object.assign(
+    	{ id: newId },
+    	req.body
+    ); // Create New Entry
+    ```
 4. Perform the operation on the POST data and send response.
-   ```javascript
-   fs.writeFile(
-     `${__dirname}/dev-data/data/tours-simple.json`,
-     JSON.stringify(tours), // `tours` is a plain javascript object. We want to save it as JSON
-     (err) => {
-       if (err) {
-         console.log(err);
-         return res.status(500).json({
-           status: 'error',
-           message: 'Failed to save the new tour.',
-         });
-       }
-       console.log('New Tour Added!');
-       res.status(201).json({
-         status: 'success',
-         data: {
-           tour: newTour,
-         },
-       });
-     }
-   );
-   ```
+    ```javascript
+    fs.writeFile(
+    	`${__dirname}/dev-data/data/tours-simple.json`,
+    	JSON.stringify(tours), // `tours` is a plain javascript object. We want to save it as JSON
+    	(err) => {
+    		if (err) {
+    			console.log(err);
+    			return res
+    				.status(500)
+    				.json({
+    					status: 'error',
+    					message:
+    						'Failed to save the new tour.',
+    				});
+    		}
+    		console.log(
+    			'New Tour Added!'
+    		);
+    		res.status(201).json({
+    			status: 'success',
+    			data: {
+    				tour: newTour,
+    			},
+    		});
+    	}
+    );
+    ```
 
-### Sending and Handling Parameters
+## Sending and Handling Parameters
 
 Parameters can be send via the URL. They can be handled on the backend using the below steps:
 
 1.  Define a new route with a placeholder for the parameter(s).
     ```javascript
-    app.get('/api/v1/tours/:id', (req, res) => {});
+    app.get(
+    	'/api/v1/tours/:id',
+    	(req, res) => {}
+    );
     ```
 2.  In this case, the parameter is `id` which can accessed via the object `req.params.id`.
 3.  Error handling can be done via one of the following two ways:
@@ -142,16 +182,204 @@ Parameters can be send via the URL. They can be handled on the backend using the
     if (!tour)
     ```
 
-- _There can be infinite parameters in a single route as follows:_
-  ```javascript
-  app.get('/api/v1/tours/:id/:name/:xyz', (req, res) => {
+-   _There can be infinite parameters in a single route as follows:_
+    ```javascript
+    app.get(
+    	'/api/v1/tours/:id/:name/:xyz',
+    	(req, res) => {
+    		//...
+    	}
+    );
+    ```
+-   _All declared placeholders must be sent from the client side unless parameters are optional. Parameters can be set optional if they are marked with a question mark `?` as shown:_
+    ```javascript
+    app.get(
+    	'/api/v1/tours/:id/:name?/:xyz?',
+    	(req, res) => {
+    		//...
+    	}
+    );
+    ```
+    Now `name` and `xyz` are optional parameters.
+
+## Refactoring Express Routes
+
+1. Different callback functions can be separated into different functions to enhance code readability.
+
+-   For Example, this code:
+    ```javascript
+    app.get(
+    	'/api/v1/tours',
+    	(req, res) => {
+    		//...
+    	}
+    );
+    ```
+-   Can be changed into this:
+    ```javascript
+    const getAllTours = (req, res) => {
+    	//...
+    };
+    app.get(
+    	'/api/v1/tours',
+    	getAllTours
+    );
+    ```
+
+2. Different routes can be shortened like as follows:
+    ```javascript
+    app.route('/api/v1/tours')
+    	.get(getAllTours)
+    	.post(createTour);
+    app.route('/api/v1/tours/:id')
+    	.get(getTour)
+    	.patch(updateTour)
+    	.delete(deleteTour);
+    ```
+
+## Middleware in Express
+
+1. All functions that come between recieving a request and sending a response, are considered `middleware`. This includes all kinds of functions such as:
+
+-   Body Parser (`app.use(express.json())`)
+-   Logger Functions (`app.use(morgan('dev'))`)
+-   Setting Headers
+-   Routers
+
+2. A middleware has access to the default `req` and `res` objects when the request hits the server. Middlewares also has access to another method called `next()`. This method is very important as it causes the `req/res` objects to move through the request/response cycle. i.e into the next middleware.
+
+3. Position is very important in middlewares. Any middleware placed after sending the response, is NOT PART of the request/response cycle.
+
+## Morgan Logging Middleware
+
+1. Morgan is a loggin middleware for EXPRESS. It's imported via:
+
+    ```javascript
+    const morgan = require('morgan');
+    app.use(morgan('dev'));
+    ```
+
+2. It logs different information about the request response cycle in the console.
+
+## Modularize Router(s)
+
+1. When there are more than one resources in the Application, it can get cluttered really quickly with the routers.
+    ```javascript
+    app.route('/api/v1/tours')
+    	.get(getAllTours)
+    	.post(createTour);
+    app.route('/api/v1/tours/:id')
+    	.get(getTour)
+    	.patch(updateTour)
+    	.delete(deleteTour);
+    //....MORE ROUTES FOR OTHER RESOURCES
+    ```
+2. Good thing in express is that we can modularize our routers in terms of separate router(s) sub-applications. We then call those sub-application(s) to act as middleware in our main application.
+    ```javascript
+    const toursRouter =
+    	express.Router();
+    app.use(
+    	'/api/v1/tours',
+    	toursRouter
+    );
+    toursRouter
+    	.route('/')
+    	.get(getAllTours)
+    	.post(createTour);
+    toursRouter
+    	.route('/:id')
+    	.get(getTour)
+    	.patch(updateTour)
+    	.delete(deleteTour);
+    ```
+
+## Refactoring File(s)
+
+1. Rather than working in one file and keeping everything in that one single file, we try to refactor our code intor separate files such as:
+
+-   Routers
+-   Controllers
+-   Server & App
+
+2. Create a new file `routes/tourRoutes.js` for keeping all the routes related to the `tour` resource.
+
+    ```javascript
+    const express = require('express');
+    const router = express.Router();
+    router
+    	.route('/')
+    	.get(tourController.getAllTours)
+    	.post(
+    		tourController.createTour
+    	);
+    router
+    	.route('/:id')
+    	.get(tourController.getTour)
+    	.patch(
+    		tourController.updateTour
+    	)
+    	.delete(
+    		tourController.deleteTour
+    	);
+
+    module.exports = router; // For exporting the router object
+    ```
+
+3. Create a new file `controllers/tourController.js` for keeping all the handlers/controller methods in it.
+
+    ```javascript
+    const fs = require('fs');
+
+    const tours = JSON
+    	.parse
+    	//..reading file (temporary)
+    	();
+    exports.getAllTours = (
+    	req,
+    	res
+    ) => {
+    	//..
+    };
+    exports.getTour = (req, res) => {
+    	//..
+    };
+    exports.createTour = (req, res) => {
+    	//..
+    };
+    exports.updateTour = (req, res) => {
+    	//..
+    };
+    exports.deleteTour = (req, res) => {
+    	//..
+    };
+    ```
+
+4. Separate the Express Logic from other Node.JS module code by making a new file `server.js`.
+
+    ```javascript
+    //app.js
     //...
-  });
-  ```
-- _All declared placeholders must be sent from the client side unless parameters are optional. Parameters can be set optional if they are marked with a question mark `?` as shown:_
-  ```javascript
-  app.get('/api/v1/tours/:id/:name?/:xyz?', (req, res) => {
+    module.exports = app;
+
+    //server.js
+    const app = require('./app');
+    // LISTENERf
+    const PORT = 3000;
+    app.listen(PORT, () => {
+    	console.log(
+    		`App is Listening on: ${PORT}`
+    	);
+    });
+    ```
+
+5. Remember to `export` methods and objects from these file.
+    ```javascript
+    module.exports = router; // 'routes/tourRoutes.js'
     //...
-  });
-  ```
-  Now `name` and `xyz` are optional parameters.
+    exports.getAllTours = (
+    	req,
+    	res
+    ) => {
+    	//...
+    };
+    ```
