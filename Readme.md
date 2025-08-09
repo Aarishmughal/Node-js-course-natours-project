@@ -2,21 +2,32 @@
 
 Express is a minimal Node.JS framework which means it is built on top of Node.JS. It allows us to develop applications much faster as it comes out-of-box with great features like:
 
--   handling complex routing
--   easier handling of requests
--   adding middleware
--   server-side rendering, etc.
+- handling complex routing
+- easier handling of requests
+- adding middleware
+- server-side rendering, etc.
 
 It also allows organizing the application into MVC architecture.
 
 ## Table of Contents
 
--   [RESTful APIs](#restful-apis)
--   [Sending back Data Formatting: JSend](#sending-back-data-formatting-jsend)
--   [Recieving Data from the Client: Middleware](#recieving-data-from-the-client-middleware)
--   [Handling POST Data](#handling-post-data)
--   [Sending and Handling Parameters](#sending-and-handling-parameters)
--   [Refactoring Express Routes](#refactoring-express-routes)
+[Express.JS](#expressjs)
+- [RESTful APIs](#restful-apis)
+- [Sending back Data Formatting: JSend](#sending-back-data-formatting-jsend)
+- [Recieving Data from the Client: Middleware](#recieving-data-from-the-client-middleware)
+- [Handling POST Data](#handling-post-data)
+- [Sending and Handling Parameters](#sending-and-handling-parameters)
+- [Refactoring Express Routes](#refactoring-express-routes)
+- [Middleware in Express](#middleware-in-express)
+- [Morgan Logging Middleware](#morgan-logging-middleware)
+- [Modularize Router(s)](#modularize-routers)
+- [Refactoring File(s)](#refactoring-files)
+- [Params Middleware](#params-middleware)
+- [Chaining Middlewares on a Route](#chaining-middlewares-on-a-route)
+- [Serving Static Files](#serving-static-files)
+- [Environment Variables](#environment-variables)
+
+**[ESLint & Prettier](#eslint--prettier)**
 
 ## Final File Structure
 
@@ -71,14 +82,10 @@ DELETE: /users/{id}/tours/{id} ->  GOOD Example
 1. Format the data into a variable using `JSON.parse()`.
     ```javascript
     const dataToSend = JSON.parse(
-    	fs.readFileSync(
-    		`${__dirname}/.../tours-simple.json`,
-    		'utf-8'
-    	)
+    	fs.readFileSync(`${__dirname}/.../tours-simple.json`, 'utf-8'),
     );
     ```
 2. Use the `.json()` method on `res` when sending back response.
-
     - Example Use:
 
     ```javascript
@@ -112,7 +119,7 @@ DELETE: /users/{id}/tours/{id} ->  GOOD Example
 
 Middlware is basically a function that can modify the incoming Request Data. It's called middleware because it stands between in the middle of the request and the response.
 
--   Add a new `middleware` in the file.
+- Add a new `middleware` in the file.
     ```javascript
     //...
     app.use(express.json());
@@ -125,12 +132,8 @@ Middlware is basically a function that can modify the incoming Request Data. It'
 2. After we have implemented middleware in our application, we now have access to the object `req.body`.
 3. Assign new ID as follows:
     ```javascript
-    const newId =
-    	tours[tours.length - 1].id + 1; // Get ID of last Entry
-    const newTour = Object.assign(
-    	{ id: newId },
-    	req.body
-    ); // Create New Entry
+    const newId = tours[tours.length - 1].id + 1; // Get ID of last Entry
+    const newTour = Object.assign({ id: newId }, req.body); // Create New Entry
     ```
 4. Perform the operation on the POST data and send response.
     ```javascript
@@ -140,24 +143,19 @@ Middlware is basically a function that can modify the incoming Request Data. It'
     	(err) => {
     		if (err) {
     			console.log(err);
-    			return res
-    				.status(500)
-    				.json({
-    					status: 'error',
-    					message:
-    						'Failed to save the new tour.',
-    				});
+    			return res.status(500).json({
+    				status: 'error',
+    				message: 'Failed to save the new tour.',
+    			});
     		}
-    		console.log(
-    			'New Tour Added!'
-    		);
+    		console.log('New Tour Added!');
     		res.status(201).json({
     			status: 'success',
     			data: {
     				tour: newTour,
     			},
     		});
-    	}
+    	},
     );
     ```
 
@@ -167,10 +165,7 @@ Parameters can be send via the URL. They can be handled on the backend using the
 
 1.  Define a new route with a placeholder for the parameter(s).
     ```javascript
-    app.get(
-    	'/api/v1/tours/:id',
-    	(req, res) => {}
-    );
+    app.get('/api/v1/tours/:id', (req, res) => {});
     ```
 2.  In this case, the parameter is `id` which can accessed via the object `req.params.id`.
 3.  Error handling can be done via one of the following two ways:
@@ -182,23 +177,17 @@ Parameters can be send via the URL. They can be handled on the backend using the
     if (!tour)
     ```
 
--   _There can be infinite parameters in a single route as follows:_
+- _There can be infinite parameters in a single route as follows:_
     ```javascript
-    app.get(
-    	'/api/v1/tours/:id/:name/:xyz',
-    	(req, res) => {
-    		//...
-    	}
-    );
+    app.get('/api/v1/tours/:id/:name/:xyz', (req, res) => {
+    	//...
+    });
     ```
--   _All declared placeholders must be sent from the client side unless parameters are optional. Parameters can be set optional if they are marked with a question mark `?` as shown:_
+- _All declared placeholders must be sent from the client side unless parameters are optional. Parameters can be set optional if they are marked with a question mark `?` as shown:_
     ```javascript
-    app.get(
-    	'/api/v1/tours/:id/:name?/:xyz?',
-    	(req, res) => {
-    		//...
-    	}
-    );
+    app.get('/api/v1/tours/:id/:name?/:xyz?', (req, res) => {
+    	//...
+    });
     ```
     Now `name` and `xyz` are optional parameters.
 
@@ -206,31 +195,23 @@ Parameters can be send via the URL. They can be handled on the backend using the
 
 1. Different callback functions can be separated into different functions to enhance code readability.
 
--   For Example, this code:
+- For Example, this code:
     ```javascript
-    app.get(
-    	'/api/v1/tours',
-    	(req, res) => {
-    		//...
-    	}
-    );
+    app.get('/api/v1/tours', (req, res) => {
+    	//...
+    });
     ```
--   Can be changed into this:
+- Can be changed into this:
     ```javascript
     const getAllTours = (req, res) => {
     	//...
     };
-    app.get(
-    	'/api/v1/tours',
-    	getAllTours
-    );
+    app.get('/api/v1/tours', getAllTours);
     ```
 
 2. Different routes can be shortened like as follows:
     ```javascript
-    app.route('/api/v1/tours')
-    	.get(getAllTours)
-    	.post(createTour);
+    app.route('/api/v1/tours').get(getAllTours).post(createTour);
     app.route('/api/v1/tours/:id')
     	.get(getTour)
     	.patch(updateTour)
@@ -241,10 +222,10 @@ Parameters can be send via the URL. They can be handled on the backend using the
 
 1. All functions that come between recieving a request and sending a response, are considered `middleware`. This includes all kinds of functions such as:
 
--   Body Parser (`app.use(express.json())`)
--   Logger Functions (`app.use(morgan('dev'))`)
--   Setting Headers
--   Routers
+- Body Parser (`app.use(express.json())`)
+- Logger Functions (`app.use(morgan('dev'))`)
+- Setting Headers
+- Routers
 
 2. A middleware has access to the default `req` and `res` objects when the request hits the server. Middlewares also has access to another method called `next()`. This method is very important as it causes the `req/res` objects to move through the request/response cycle. i.e into the next middleware.
 
@@ -265,9 +246,7 @@ Parameters can be send via the URL. They can be handled on the backend using the
 
 1. When there are more than one resources in the Application, it can get cluttered really quickly with the routers.
     ```javascript
-    app.route('/api/v1/tours')
-    	.get(getAllTours)
-    	.post(createTour);
+    app.route('/api/v1/tours').get(getAllTours).post(createTour);
     app.route('/api/v1/tours/:id')
     	.get(getTour)
     	.patch(updateTour)
@@ -276,30 +255,19 @@ Parameters can be send via the URL. They can be handled on the backend using the
     ```
 2. Good thing in express is that we can modularize our routers in terms of separate router(s) sub-applications. We then call those sub-application(s) to act as middleware in our main application.
     ```javascript
-    const toursRouter =
-    	express.Router();
-    app.use(
-    	'/api/v1/tours',
-    	toursRouter
-    );
-    toursRouter
-    	.route('/')
-    	.get(getAllTours)
-    	.post(createTour);
-    toursRouter
-    	.route('/:id')
-    	.get(getTour)
-    	.patch(updateTour)
-    	.delete(deleteTour);
+    const toursRouter = express.Router();
+    app.use('/api/v1/tours', toursRouter);
+    toursRouter.route('/').get(getAllTours).post(createTour);
+    toursRouter.route('/:id').get(getTour).patch(updateTour).delete(deleteTour);
     ```
 
 ## Refactoring File(s)
 
 1. Rather than working in one file and keeping everything in that one single file, we try to refactor our code intor separate files such as:
 
--   Routers
--   Controllers
--   Server & App
+- Routers
+- Controllers
+- Server & App
 
 2. Create a new file `routes/tourRoutes.js` for keeping all the routes related to the `tour` resource.
 
@@ -309,18 +277,12 @@ Parameters can be send via the URL. They can be handled on the backend using the
     router
     	.route('/')
     	.get(tourController.getAllTours)
-    	.post(
-    		tourController.createTour
-    	);
+    	.post(tourController.createTour);
     router
     	.route('/:id')
     	.get(tourController.getTour)
-    	.patch(
-    		tourController.updateTour
-    	)
-    	.delete(
-    		tourController.deleteTour
-    	);
+    	.patch(tourController.updateTour)
+    	.delete(tourController.deleteTour);
 
     module.exports = router; // For exporting the router object
     ```
@@ -334,10 +296,7 @@ Parameters can be send via the URL. They can be handled on the backend using the
     	.parse
     	//..reading file (temporary)
     	();
-    exports.getAllTours = (
-    	req,
-    	res
-    ) => {
+    exports.getAllTours = (req, res) => {
     	//..
     };
     exports.getTour = (req, res) => {
@@ -366,20 +325,130 @@ Parameters can be send via the URL. They can be handled on the backend using the
     // LISTENERf
     const PORT = 3000;
     app.listen(PORT, () => {
-    	console.log(
-    		`App is Listening on: ${PORT}`
-    	);
+    	console.log(`App is Listening on: ${PORT}`);
     });
     ```
+
+    - Add a new script in `packages.json`:
+        ```bash
+        ...
+        "start":"nodemon server.js",
+        ...
+        ```
 
 5. Remember to `export` methods and objects from these file.
     ```javascript
     module.exports = router; // 'routes/tourRoutes.js'
     //...
-    exports.getAllTours = (
-    	req,
-    	res
-    ) => {
+    exports.getAllTours = (req, res) => {
     	//...
     };
     ```
+
+## Params Middleware
+
+1. Instead of checking ids and other parameters sent with the request in the handler/controller method, it is a far better strategy to contain this logic in a separate middleware.
+2. Just above the handler methods in the controller:
+    ```javascript
+    exports.checkId = (req, res, next, val) => {
+    	if (val * 1 > tours.length) {
+    		console.log(`Invalid ID: ${val}`);
+    		return res.status(404).json({
+    			status: 'fail',
+    			message: 'Invalid ID',
+    		});
+    	}
+    	next();
+    };
+    ```
+3. In the router, import this method as a middleware to the `router` object above the routes.
+   `javascript
+router.param('id', tourController.checkId);
+`
+   _This middleware will now be used with every request sent to the respective router (only if there is a parameter specified in the middleware, sent with the request)_
+
+## Chaining Middlewares on a Route
+
+1. Multiple middlewares can be chained on a single route.
+    ```javascript
+    //controller_code
+    exports.checkBody = (req, res, next) => {
+    	if (!req.body.name || !req.body.price) {
+    		console.log(`Invalid Name or Price`);
+    		return res.status(400).json({
+    			status: 'fail',
+    			message: 'Invalid Name or Price',
+    		});
+    	}
+    	next();
+    };
+    ```
+2. In the router, we can chain this middleware with the route as follows:
+    ```javascript
+    router
+    	.route('/')
+    	.get(tourController.getAllTours)
+    	.post(tourController.checkBody, tourController.createTour);
+    ```
+
+## Serving Static Files
+
+1. In express, we can serve static files using the express built-in middleware `express.static()`.
+    ```javascript
+    app.use(express.static(`${__dirname}/public`));
+    ```
+2. All FILES in the `public` directory are now served on the node server.
+
+## Environment Variables
+
+1. Environment variables are used to store sensitive information such as API keys, database credentials, etc.
+2. In Node.JS, we can use the `dotenv` package to manage environment variables
+    ```bash
+    npm install dotenv
+    ```
+3. Create a `.env` file in the root directory of your project and add your environment variables there:
+    ```
+    PORT=3000
+    DATABASE_URL=mongodb://localhost:27017/mydatabase
+    SECRET_KEY=mysecretkey
+    ```
+4. In your `app.js` or `server.js`, import the `dotenv` package and call the `config()` method to load the environment variables:
+    ```javascript
+    require('dotenv').config();
+    const PORT = process.env.PORT || 3000;
+    const DATABASE_URL = process.env.DATABASE_URL;
+    const SECRET_KEY = process.env.SECRET_KEY;
+    ```
+5. Now you can access these environment variables using `process.env.VARIABLE_NAME` throughout your application.
+6. Make sure to add `.env` to your `.gitignore` file to prevent it from being committed to version control:
+    ```
+    # .gitignore
+    .env
+    ```
+
+# ESLint & Prettier
+
+1. **ESLint** is a tool for identifying and reporting on patterns found in ECMAScript/JavaScript code. It helps maintain code quality and consistency.
+2. **Prettier** is an opinionated code formatter that ensures your code is formatted consistently across your project.
+3. To set up ESLint and Prettier in your project, follow these steps:
+    ```bash
+    npm install --save-dev eslint prettier eslint-config-prettier eslint-plugin-prettier
+    ```
+    OR
+    ```json
+    //...
+    "devDependencies": {
+    	"cross-env": "^10.0.0",
+    	"eslint": "^8.57.1",
+    	"eslint-config-airbnb": "^19.0.4",
+    	"eslint-config-node": "^4.1.0",
+    	"eslint-config-prettier": "^10.1.8",
+    	"eslint-plugin-import": "^2.32.0",
+    	"eslint-plugin-jsx-a11y": "^6.10.2",
+    	"eslint-plugin-node": "^11.1.0",
+    	"eslint-plugin-prettier": "^5.5.4",
+    	"eslint-plugin-react": "^7.37.5",
+    	"prettier": "^3.6.2"
+    }
+    ```
+4. An eslint configuration is included in this directory as `.eslintrc.json`. You can modify it according to your project's needs. or simply copy it into your project root directory.
