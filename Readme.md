@@ -11,7 +11,8 @@ It also allows organizing the application into MVC architecture.
 
 ## Table of Contents
 
-[Express.JS](#expressjs)
+**[Express.JS](#expressjs)**
+
 - [RESTful APIs](#restful-apis)
 - [Sending back Data Formatting: JSend](#sending-back-data-formatting-jsend)
 - [Recieving Data from the Client: Middleware](#recieving-data-from-the-client-middleware)
@@ -28,6 +29,12 @@ It also allows organizing the application into MVC architecture.
 - [Environment Variables](#environment-variables)
 
 **[ESLint & Prettier](#eslint--prettier)**
+
+- [Adding files to .gitignore](#adding-files-to-gitignore)
+
+**[MongoDB & Mongoose](#mongodb--mongoose)**
+
+- [MongoDB](#mongodb)
 
 ## Final File Structure
 
@@ -82,7 +89,10 @@ DELETE: /users/{id}/tours/{id} ->  GOOD Example
 1. Format the data into a variable using `JSON.parse()`.
     ```javascript
     const dataToSend = JSON.parse(
-    	fs.readFileSync(`${__dirname}/.../tours-simple.json`, 'utf-8'),
+    	fs.readFileSync(
+    		`${__dirname}/.../tours-simple.json`,
+    		'utf-8',
+    	),
     );
     ```
 2. Use the `.json()` method on `res` when sending back response.
@@ -185,9 +195,12 @@ Parameters can be send via the URL. They can be handled on the backend using the
     ```
 - _All declared placeholders must be sent from the client side unless parameters are optional. Parameters can be set optional if they are marked with a question mark `?` as shown:_
     ```javascript
-    app.get('/api/v1/tours/:id/:name?/:xyz?', (req, res) => {
-    	//...
-    });
+    app.get(
+    	'/api/v1/tours/:id/:name?/:xyz?',
+    	(req, res) => {
+    		//...
+    	},
+    );
     ```
     Now `name` and `xyz` are optional parameters.
 
@@ -211,7 +224,9 @@ Parameters can be send via the URL. They can be handled on the backend using the
 
 2. Different routes can be shortened like as follows:
     ```javascript
-    app.route('/api/v1/tours').get(getAllTours).post(createTour);
+    app.route('/api/v1/tours')
+    	.get(getAllTours)
+    	.post(createTour);
     app.route('/api/v1/tours/:id')
     	.get(getTour)
     	.patch(updateTour)
@@ -246,7 +261,9 @@ Parameters can be send via the URL. They can be handled on the backend using the
 
 1. When there are more than one resources in the Application, it can get cluttered really quickly with the routers.
     ```javascript
-    app.route('/api/v1/tours').get(getAllTours).post(createTour);
+    app.route('/api/v1/tours')
+    	.get(getAllTours)
+    	.post(createTour);
     app.route('/api/v1/tours/:id')
     	.get(getTour)
     	.patch(updateTour)
@@ -257,8 +274,15 @@ Parameters can be send via the URL. They can be handled on the backend using the
     ```javascript
     const toursRouter = express.Router();
     app.use('/api/v1/tours', toursRouter);
-    toursRouter.route('/').get(getAllTours).post(createTour);
-    toursRouter.route('/:id').get(getTour).patch(updateTour).delete(deleteTour);
+    toursRouter
+    	.route('/')
+    	.get(getAllTours)
+    	.post(createTour);
+    toursRouter
+    	.route('/:id')
+    	.get(getTour)
+    	.patch(updateTour)
+    	.delete(deleteTour);
     ```
 
 ## Refactoring File(s)
@@ -388,7 +412,10 @@ router.param('id', tourController.checkId);
     router
     	.route('/')
     	.get(tourController.getAllTours)
-    	.post(tourController.checkBody, tourController.createTour);
+    	.post(
+    		tourController.checkBody,
+    		tourController.createTour,
+    	);
     ```
 
 ## Serving Static Files
@@ -452,3 +479,113 @@ router.param('id', tourController.checkId);
     }
     ```
 4. An eslint configuration is included in this directory as `.eslintrc.json`. You can modify it according to your project's needs. or simply copy it into your project root directory.
+
+## Adding files to .gitignore
+
+1. Create a new `.gitignore` file if already not exists.
+    ```bash
+    touch .gitignore
+    ```
+2. Add the filename with extension in this file as simple plain text.
+    ```txt
+    node_modules
+    config.env
+    ```
+3. Remove the files from the git cache.
+    ```bash
+    git rm --cached config.env
+    ```
+
+# MongoDB & Mongoose
+
+## MongoDB
+
+1. A NOsql database that is very versatile and lightweight.
+2. Creates **DOCUMENTS** instead of **ROWS** for data values like in relational databases.
+3. Creates **COLLECTIONS** instead of **TABLES** for holding rows like in relational databases.
+4. Uses **BSON** for storage:
+    - Similar to JSON.
+    - Uses DataType restrictions
+    - Max size for a BSON document is **16 MBs** which might increase in future.
+    - Each Document contains a unique ID.
+5. Each Document in MongoDB contains fields (Columns in Relational DB) as well as their values.
+6. One single field could contain more than 1 value (Unlike in Relational DB).
+7. **Embedded Documents:**
+    - Including related data into a single document.
+    - This could mean multiple documents into one single document.
+    - This is also called "DENORMALIZING" as it's opposite to what happens in Normalizing in Relational Databases.
+    - Simply, documents into documents.
+
+## npm MongoDB & Mongoose
+
+1. An NPM Package that allows us to connect our MongoDB with our Node App and perform operations on the Database.
+2. Similar to mongoDb except `Mongoose` offers many useful methods out-of-the-box.
+
+## Connecting Mongo Atlas Database with Node App
+
+1. Open Mongo Atlas > YOUR DATABASE > YOUR CLUSTER.
+2. Open the Connect Wizard and copy the `Connection String`.
+3. Create a new file `config.env` in the project filder for storing [`ENVIRONMENT_VARIABLES`](#environment-variables).
+4. Create a new variable in this config file.
+    ```env
+    DATABASE=[CONNECTION STRING HERE]
+    DATABASE_PASSWORD=[DATABASE USER PASSWORD]
+    ```
+5. Use a placeholder of your own in the Connection String instead of the user password like `<DATABASE_PASSWORD>`.
+6. Form the correct Connection String in the file `server.js` by following the code below:
+    ```javascript
+    const mongoose = require('mongoose');
+    const dotenv = require('dotenv');
+    //...
+    dotenv.config({
+    	path: './config.env',
+    });
+    const DB = process.env.DATABASE.replace(
+    	'<DATABASE_PASSWORD>',
+    	process.env.DATABASE_PASSWORD,
+    );
+    mongoose
+    	.connect(DB, {
+    		useNewUrlParser: true,
+    		useCreateIndex: true,
+    		useFindAndModify: false,
+    	})
+    	.then(() => {
+    		console.log('Database Connection Successful!');
+    	});
+    ```
+7. Launch the node app and database will connect automatically.
+
+## Adding Documents via Node.js App & Mongoose
+
+1. In the controller, edit the create method:
+    ```javascript
+    //...
+    async (req, res) => {
+        const newTour = new Tour({});
+	    newTour.save();			// LEGACY METHOD
+    	//...
+    	try {
+    		const newTour = await Tour.create(req.body);
+    		res.status(201).json({
+    			status: 'success',
+    			data: {
+    				tour: newTour,
+    			},
+    		});
+    	} catch (err) {
+    		res.status(400).json({
+    			status: 'fail',
+    			message: 'Invalid Data Sent!',
+    		});
+    	}
+    };
+    ```
+2. Simple Graphical view of process of adding a new document can be simple as follows:
+    ```c++
+    // LEGACY METHOD
+    Mongoose => Schema => Data Object Model => Document => Methods
+
+    // MODERN METHOD
+    Mongoose => Schema => Data Object Model => Methods
+    ```

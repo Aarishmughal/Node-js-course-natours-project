@@ -1,80 +1,90 @@
-const fs = require('fs');
+const Tour = require('./../models/tourModel');
 
-const tours = JSON.parse(
-	fs.readFileSync(`${__dirname}/../dev-data/data/tours-simple.json`, 'utf-8'),
-);
-exports.checkBody = (req, res, next) => {
-	if (!req.body.name || !req.body.price) {
-		console.log(`Invalid Name or Price`);
-		return res.status(400).json({
+exports.getAllTours = async (req, res) => {
+	try {
+		const tours = await Tour.find();
+		res.status(200).json({
+			status: 'success',
+			results: tours.length,
+			data: { tours },
+		});
+	} catch (err) {
+		res.status(404).json({
 			status: 'fail',
-			message: 'Invalid Name or Price',
+			message: err,
 		});
 	}
-	next();
 };
-exports.checkId = (req, res, next, val) => {
-	if (val * 1 > tours.length) {
-		console.log(`Invalid ID: ${val}`);
-		return res.status(404).json({
+exports.getTour = async (req, res) => {
+	try {
+		//Tour.findOne({ _id: req.params.id})
+		const tour = await Tour.findById(req.params.id);
+		res.status(200).json({
+			status: 'success',
+			data: { tour },
+		});
+	} catch (err) {
+		res.status(404).json({
 			status: 'fail',
-			message: 'Invalid ID',
+			message: err,
 		});
 	}
-	next();
 };
-exports.getAllTours = (req, res) => {
-	res.status(200).json({
-		status: 'success',
-		results: tours.length,
-		requestedAt: req.requestTime,
-		data: { tours },
-	});
-};
-exports.getTour = (req, res) => {
-	const tour = tours.find((el) => el.id === req.params.id * 1);
-	res.status(200).json({
-		status: 'success',
-		data: { tour },
-	});
-};
-exports.createTour = (req, res) => {
-	const newId = tours[tours.length - 1].id + 1;
-	const newTour = Object.assign({ id: newId }, req.body);
-	tours.push(newTour);
+exports.createTour = async (req, res) => {
+	// const newTour = new Tour({});
+	// newTour.save();			// LEGACY METHOD
 
-	fs.writeFile(
-		`${__dirname}/../dev-data/data/tours-simple.json`,
-		JSON.stringify(tours), // `tours` is a plain javascript object. We want to save it as JSON
-		(err) => {
-			if (err) {
-				console.log(err);
-				return res.status(500).json({
-					status: 'error',
-					message: 'Failed to save the new tour.',
-				});
-			}
-			console.log('New Tour Added!');
-			res.status(201).json({
-				status: 'success',
-				data: {
-					tour: newTour,
-				},
-			});
-		},
-	);
+	try {
+		const newTour = await Tour.create(req.body); // BETTER METHOD
+		res.status(201).json({
+			status: 'success',
+			data: {
+				tour: newTour,
+			},
+		});
+	} catch (err) {
+		res.status(400).json({
+			status: 'fail',
+			message: 'Invalid Data Sent!',
+		});
+	}
 };
-exports.updateTour = (req, res) => {
-	res.status(204).json({
-		status: 'success',
-		data: {
-			tour: '<Updated Tour Placeholder>',
-		},
-	});
+exports.updateTour = async (req, res) => {
+	try {
+		const tourToUpdate = await Tour.findByIdAndUpdate(
+			req.params.id,
+			req.body,
+			{
+				new: true, // New Updated Document will be returned
+				runValidators: true, // Run Schema's Validation Rules once again
+			},
+		);
+
+		res.status(200).json({
+			status: 'success',
+			data: {
+				tour: tourToUpdate,
+			},
+		});
+	} catch (err) {
+		res.status(400).json({
+			status: 'fail',
+			message: 'Invalid Data Sent!',
+		});
+	}
 };
-exports.deleteTour = (req, res) => {
-	res.status(204).json({
-		status: 'success',
-		data: null,
-	});
+exports.deleteTour = async (req, res) => {
+	try {
+		await Tour.findByIdAndDelete(req.params.id);
+		res.status(204).json({
+			status: 'success',
+			message: 'Tour Deleted!',
+			data: null,
+		});
+	} catch (err) {
+		res.status(400).json({
+			status: 'fail',
+			message: 'Invalid Data Sent!',
+		});
+	}
 };
