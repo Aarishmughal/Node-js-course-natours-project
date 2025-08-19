@@ -35,6 +35,23 @@ It also allows organizing the application into MVC architecture.
 **[MongoDB & Mongoose](#mongodb--mongoose)**
 
 - [MongoDB](#mongodb)
+- [npm MongoDB & Mongoose](#npm-mongodb--mongoose)
+- [Connecting Mongo Atlas Database with Node App](#connecting-mongo-atlas-database-with-node-app)
+- [Performing CRUD Operations via Node.js App & Mongoose](#performing-crud-operations-via-nodejs-app--mongoose)
+    - [Creating Documents](#creating-documents)
+    - [Getting Documents](#getting-documents)
+    - [Updating Documents](#updating-documents)
+    - [Deleting Documents](#deleting-documents)
+- [Improving Modelling](#improving-modelling)
+- [Writing an Importing/Erasing Script](#writing-an-importingerasing-script)
+- [Improving the API by adding Features](#improving-the-api-by-adding-features)
+    - [Filtering Documents](#filtering-documents)
+    - [Advanced Filtering Documents](#advanced-filtering-documents)
+    - [Sorting Documents](#sorting-documents)
+    - [Field Limiting](#field-limiting)
+    - [Pagination & Limit Documents](#pagination--limit-documents)
+    - [Await the Query](#await-the-query)
+    - [Aliasing Common Routes](#aliasing-common-routes)
 
 ## Final File Structure
 
