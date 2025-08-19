@@ -9,6 +9,12 @@ const tourController = require('./../controllers/tourController');
 // } = require('./../controllers/tourController');
 const router = express.Router();
 
+router
+	.route('/top-5-cheap')
+	.get(
+		tourController.aliasTopTours,
+		tourController.getAllTours,
+	);
 // router.param('id', tourController.checkId);
 router
 	.route('/')

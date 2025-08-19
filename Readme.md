@@ -556,14 +556,16 @@ router.param('id', tourController.checkId);
     ```
 7. Launch the node app and database will connect automatically.
 
-## Adding Documents via Node.js App & Mongoose
+## Performing CRUD Operations via Node.js App & Mongoose
+
+### Creating Documents
 
 1. In the controller, edit the create method:
     ```javascript
     //...
     async (req, res) => {
-        const newTour = new Tour({});
-	    newTour.save();			// LEGACY METHOD
+    	const newTour = new Tour({});
+    	newTour.save(); // LEGACY METHOD
     	//...
     	try {
     		const newTour = await Tour.create(req.body);
@@ -582,6 +584,7 @@ router.param('id', tourController.checkId);
     };
     ```
 2. Simple Graphical view of process of adding a new document can be simple as follows:
+
     ```c++
     // LEGACY METHOD
     Mongoose => Schema => Data Object Model => Document => Methods
@@ -589,3 +592,354 @@ router.param('id', tourController.checkId);
     // MODERN METHOD
     Mongoose => Schema => Data Object Model => Methods
     ```
+
+### Getting Documents
+
+1. In the controller method, to get all tours on the get request.
+    ```javascript
+    const getAllTours = async (req, res) => {
+    	const tours = await Tour.find();
+    	res.status(200).json({
+    		status: 'success',
+    		results: tours.length,
+    		data: { tours },
+    	});
+    };
+    ```
+2. This will return all the tours without any query or filtering.
+
+### Updating Documents
+
+1. For updating, we use the PATCH http method.
+    ```javascript
+    const tourToUpdate = await Tour.findByIdAndUpdate(
+    	req.params.id,
+    	req.body,
+    	{
+    		new: true, // New Updated Document will be returned
+    		runValidators: true, // Run Schema's Validation Rules once again
+    	},
+    );
+    res.status(200).json({
+    	status: 'success',
+    	data: {
+    		tour: tourToUpdate,
+    	},
+    });
+    ```
+2. This will send back the updated tour with the updated data.
+
+### Deleting Documents
+
+1. We handle the delete request with the DELETE http method.
+    ```javascript
+    await Tour.findByIdAndDelete(req.params.id);
+    res.status(204).json({
+    	status: 'success',
+    	message: 'Tour Deleted!',
+    	data: null,
+    });
+    ```
+2. Since it returns null, so we do not have to save the value into any variable.
+
+## Improving Modelling
+
+1. This section is better understandable in the light of an example.
+    ```javascript
+    //...
+    name: {
+    	type: String,
+    	required: [true, 'A Tour must have a Name.'],
+    	unique: true,
+    	trim: true,
+    },
+    //...
+    ```
+2. Each property type have different options that can be applied to the property. For example `String` data type has the option `trim:true`. This option removes the whitespace in the start and end of a string value.
+3. `required` option accepts an array with first being a boolean and the next being the error message to return in case validation isn't passed.
+4. In the example,
+    ```javascript
+    //...
+    ratingsAverage: { type: Number, default: 4.5 },
+    //...
+    ```
+    The `default` option allows a default value to be stored for every instance of the schema model (each document).
+5. A property can have multiple values by:
+    ```javascript
+    //...
+    images: [{ type: String }],
+    //...
+    ```
+    This allows multiple values to be stored under the `images` property via an array.
+
+## Writing an Importing/Erasing Script
+
+1. During development, the process can be made more quick and smooth by using a small custom script that does the loading and off-loading of json data from a json file to the database.
+2. Usually a better idea to make such script next to the dev-data json file.
+3. Connect to the database.
+
+    ```javascript
+    const fs = require('fs');
+    const mongoose = require('mongoose');
+    const dotenv = require('dotenv');
+
+    const Tour = require('./../../models/tourModel');
+
+    dotenv.config({
+    	path: './config.env',
+    });
+    const DB = process.env.DATABASE.replace(
+    	'<DATABASE_PASSWORD>',
+    	process.env.DATABASE_PASSWORD,
+    );
+    mongoose
+    	.connect(DB, {
+    		useNewUrlParser: true,
+    		useCreateIndex: true,
+    		useFindAndModify: false,
+    	})
+    	.then(() => {
+    		console.log('Database Connection Successful!');
+    	});
+    ```
+
+4. Read the JSON File.
+    ```javascript
+    // READ JSON FILE
+    const tours = JSON.parse(
+    	fs.readFileSync(
+    		`${__dirname}/tours-simple.json`,
+    		'utf-8',
+    	),
+    );
+    ```
+5. Create methods by following the code below:
+    ```javascript
+    // IMPORT DATA INTO DATABASE
+    const importData = async () => {
+    	try {
+    		await Tour.create(tours);
+    		console.log('Data Successfully Loaded!');
+    	} catch (err) {
+    		console.log(err);
+    	}
+    	process.exit();
+    };
+    //...
+    // DELETE ALL EXISTING DATA FROM COLLECTION
+    const deleteData = async () => {
+    	try {
+    		await Tour.deleteMany();
+    		console.log('Data Successfully Deleted!');
+    	} catch (err) {
+    		console.log(err);
+    	}
+    	process.exit();
+    };
+    ```
+6. You may control your script by using the `process` object as follows:
+    ```javascript
+    if (process.argv[2] === '--import') {
+    	importData();
+    } else if (process.argv[2] === '--delete') {
+    	deleteData();
+    }
+    ```
+    To control your script your command now must accept a third argument like this:
+    ```bash
+    node [script-filename] --import
+    ```
+    OR
+    ```bash
+    node [script-filename] --delete
+    ```
+
+## Improving the API by adding Features
+
+To improve our API, we'll include different features such as filtering, advanced filtering, sorting, field limits, pagination, etc.
+The standard process to implement these features is as follows:
+
+```
+GENERAL FILTERING
+Controller Method
+    => Building Query
+        => Get Query Object
+            => Define Excluded Fields
+                => Remove Excluded Fields from Query Object
+
+ADVANCED FILTERING
+=> Create a new String by stringifying Query object
+    => Replace Advanced Filtering Keywords in query with '$' in start
+        => Create a new Object 'query' by using `find()` method.
+
+SORTING
+=> Check if there is 'sort' in query.
+    => Get all sorting columns.
+        => Update the 'query' object by using `sort()` method.
+        => Minus in column names acts as excluder.
+
+LIMITING FIELDS
+=> Check if there is 'fields' in query
+    => Get all required fields.
+        => Update the 'query' object by using `select()` method.
+        => Minus in column names acts as excluder.
+
+PAGINATION
+=> Get Page number from query.
+=> Get Limit Value from query.
+    => Compute value of `skip`.
+        => Get specified documents by skipping `skip` amount of documents.
+            => Error handle if page doesn't exist.
+
+EXECUTE QUERY
+=> Await `query` object and save it into another variable.
+```
+
+### Filtering Documents
+
+1. First extract the query object from the request object.
+    ```javascript
+    const queryObj = { ...req.query };
+    ```
+2. Specify words to be excluded in an array.
+    ```javascript
+    const excludedFields = [
+    	'page',
+    	'sort',
+    	'limit',
+    	'fields',
+    ];
+    ```
+3. Remove the exluded fields from the query object.
+    ```javascript
+    excludedFields.forEach((el) => delete queryObj[el]);
+    ```
+4. Proceed to next advancements.
+
+### Advanced Filtering Documents
+
+1. Get String for the `query` object.
+    ```javascript
+    let queryStr = JSON.stringify(queryObj);
+    ```
+2. Form the Mongo Query from the string query.
+    ```javascript
+    queryStr = queryStr.replace(
+    	/\b(gte|gt|lte|lt)\b/g,
+    	(match) => `$${match}`,
+    );
+    ```
+3. Store the final query in a new object `query`.
+    ```javascript
+    let query = Tour.find(JSON.parse(queryStr));
+    ```
+
+### Sorting Documents
+
+1. Check if there exists a sorting keyword.
+    ```javascript
+    if (req.query.sort) {
+    }
+    ```
+2. Get all sorting keyword from the request object using `split()` method.
+    ```javascript
+    const sortBy = req.query.sort.split(',').join(' ');
+    ```
+3. Mutate the `query` object created before using `sort()`.
+    ```javascript
+    query = query.sort(sortBy);
+    ```
+4. Add Error handling in case there is not sort object.
+    ```javascript
+    else {
+    		query = query.sort('-createdAt');
+    	}
+    ```
+
+### Field Limiting
+
+1. Check if there exists a fields keyword.
+    ```javascript
+    if (req.query.fields) {
+    }
+    ```
+2. Get all fields from the request object using `split()` method.
+    ```javascript
+    const fields = req.query.fields.split(',').join(' ');
+    ```
+3. Mutate the `query` object created before using `select()`.
+    ```javascript
+    query = query.select(sortBy);
+    ```
+4. Add Error handling in case there is not sort object.
+
+    ```javascript
+    else {
+    		query = query.select('-__v'); // Minus acts as Excluder
+    	}
+    ```
+
+### Pagination & Limit Documents
+
+1. Get `page` count from the query & Convert it into Number.
+    ```javascript
+    const page = req.query.page * 1 || 1;
+    ```
+2. Same for `limit`.
+    ```javascript
+    const limit = req.query.limit * 1 || 1;
+    ```
+3. Calculate value for `skip`.
+    ```javascript
+    const skip = (page - 1) * limit;
+    ```
+4. Mutate the `query` object. Get all required documents by skipping `skip` number of documents.
+    ```javascript
+    query = query.skip(skip).limit(limit);
+    ```
+5. Perform error handling for invalid page number.
+    ```javascript
+    if (req.query.page) {
+    	const numTours = await Tour.countDocuments();
+    	if (skip >= numTours)
+    		throw new Error('This page does not exist');
+    }
+    ```
+
+### Await the Query
+
+1. Execute the query and store it into a new variable.
+    ```javascript
+    const tours = await query;
+    res.status(200).json({
+    	status: 'success',
+    	results: tours.length,
+    	data: { tours },
+    });
+    ```
+
+### Aliasing Common Routes
+
+Sometimes, it is better to make separate route for common routes to increase server performance and reduce resources being used at each request. This also reduces additional code by utilizing the already written code.
+
+1. In the router, create a new route.
+    ```javascript
+    router
+    	.route('/top-5-cheap')
+    	.get(
+    		MIDDLEWARE_FUNCTION,
+    		REGULAR_CONTROLLER_METHOD,
+    	);
+    ```
+2. Create a new `MIDDLEWARE_FUNCTION` in the controller. This method will be used to alter the `req` object before it is passed to the `REGULAR_CONTROLLER_METHOD`.
+    ```javascript
+    // Controller
+    exports.aliasTopTours = (req, res, next) => {
+    	req.query.limit = '5';
+    	req.query.sort = '-ratingsAverage,price';
+    	req.query.fields =
+    		'name,price,ratingsAverage,summary,difficulty';
+    	next();
+    };
+    ```
+3. This way now whenever anyone accesses this new route, the query is already built and passed to the controller method.
