@@ -22,6 +22,7 @@
 			"error",
 			{ "object": true, "array": false }
 		],
+		"arrow-body-style": "off",
 		"no-unused-vars": [
 			"error",
 			{ "argsIgnorePattern": "req|res|next|val" }

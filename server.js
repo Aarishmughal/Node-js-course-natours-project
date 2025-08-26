@@ -1,6 +1,15 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 
+// GLOBAL UNHANDLED EXCEPTION Handler
+process.on('uncaughtException', (err) => {
+	console.log('Server is Shutting Down...💀');
+	console.log(
+		`Error 💥: ${err.name}\nMessage 💬: ${err.message.toUpperCase()}`,
+	);
+	process.exit(1);
+});
+
 dotenv.config({
 	path: './config.env',
 });
@@ -16,14 +25,23 @@ mongoose
 		useNewUrlParser: true,
 		useCreateIndex: true,
 		useFindAndModify: false,
+		useUnifiedTopology: true,
 	})
 	.then(() => {
-		console.log('Database Connection Successful!');
+		console.log('Database Connection Successful ✅');
 	});
 
 // LISTENER
 const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
 	console.log(`App is Listening on: ${PORT}`);
+});
+
+// GLOBAL UNHANDLED REJECTION Handler
+process.on('unhandledRejection', (err) => {
+	console.log('Server is Shutting Down...💀');
+	console.log(err);
+	server.close(() => {
+		process.exit(1);
+	});
 });

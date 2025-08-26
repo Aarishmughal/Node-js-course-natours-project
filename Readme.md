@@ -1,15 +1,4 @@
-# Express.JS
-
-Express is a minimal Node.JS framework which means it is built on top of Node.JS. It allows us to develop applications much faster as it comes out-of-box with great features like:
-
-- handling complex routing
-- easier handling of requests
-- adding middleware
-- server-side rendering, etc.
-
-It also allows organizing the application into MVC architecture.
-
-## Table of Contents
+# Table of Contents
 
 **[Express.JS](#expressjs)**
 
@@ -52,6 +41,27 @@ It also allows organizing the application into MVC architecture.
     - [Pagination & Limit Documents](#pagination--limit-documents)
     - [Await the Query](#await-the-query)
     - [Aliasing Common Routes](#aliasing-common-routes)
+- [MongoDB Aggregation Pipeline](#mongodb-aggregation-pipeline)
+- [Virtual Properties](#virtual-properties)
+- [Mongoose Middlewares](#mongoose-middlewares)
+    - [Document Middleware](#document-middleware)
+    - [Query Middleware](#query-middleware)
+    - [Aggregation Middleware](#aggregation-middleware)
+- [Data Validation for Mongoose Models](#data-validation-for-mongoose-models)
+    - [Built-in Validators](#built-in-validators)
+    - [Third Party Validators](#third-party-validators)
+    - [Custom Validators](#custom-validators)
+
+# Express.JS
+
+Express is a minimal Node.JS framework which means it is built on top of Node.JS. It allows us to develop applications much faster as it comes out-of-box with great features like:
+
+- handling complex routing
+- easier handling of requests
+- adding middleware
+- server-side rendering, etc.
+
+It also allows organizing the application into MVC architecture.
 
 ## Final File Structure
 
@@ -960,3 +970,516 @@ Sometimes, it is better to make separate route for common routes to increase ser
     };
     ```
 3. This way now whenever anyone accesses this new route, the query is already built and passed to the controller method.
+
+## MongoDB Aggregation Pipeline
+
+A very powerful MongoDB framework.
+The concept is to define a pipeline that all documents from a certain collection go throught where they are processed step by step in order to transform them into aggregated results.
+For example, we can use the aggregation pipeline for calculating averages, minimum, maximum, etc.
+
+1. We can use the aggregation pipeline on our Mongoos Schema Model via the `aggregate()` method. This method accepts an array of Javacript Objects. Each object is called an "AGGREGATION STAGE".
+2. Each Javascript Object starts with the name of the Aggregation Stage as below:
+    ```javascript
+    //...
+    const tours = await Tour.aggregate([
+    	{
+    		$match:{ ratingsAverage: { $gte: 4.5 } },,
+    	},
+        {
+    		$group: {
+    		// _id: null,
+    		    _id: { $toUpper: '$difficulty' },
+    		    numTours: { $sum: 1 },
+    			numRatings: {
+    				$sum: '$ratingsQuantity',
+    			},
+    			avgRating: { $avg: '$ratingsAverage' },
+    			avgPrice: { $avg: '$price' },
+    			minPrice: { $min: '$price' },
+    			maxPrice: { $max: '$price' },
+    		},
+    	},
+        //...
+    ]);
+    ```
+3. All the stages in the aggregation pipeline are executed one-by-one in the order they are defined in the array.
+
+4. A few important stages for the aggregation pipeline are as follows:
+    - `$match`: Similar to the `find()` method. Filters the documents to allow only those that match the specified condition(s) to pass to the next stage.
+    - `$group`: Groups the documents by a specified value. Similar to the `GROUP BY` statement in SQL. It is mandatory to specify the `_id` field in this stage. This field contains the value by which we want to group the documents. Other fields can be specified as well to perform operations on them such as `SUM`, `AVG`, `MIN`, `MAX`, etc.
+    - `$sort`: Similar to the `sort()` method. Sorts the documents by a specified field in ascending or descending order.
+    - `$project`: Similar to the `select()` method. Used to include or exclude fields from the documents.
+    - `$limit`: Similar to the `limit()` method. Limits the number of documents passed to the next stage.
+    - `$unwind`: Deconstructs an array field from the input documents to output a document for each element. Each element of the array will be a separate document.
+
+5. An example of a practical business application made using MongoDB Aggregation Pipeline is as follows:
+
+    ```javascript
+    // Get Monthly Plan
+    exports.getMonthlyPlan = async (req, res) => {
+    	try {
+    		const year = req.params.year * 1; // 2021
+
+    		const plan = await Tour.aggregate([
+    			{
+    				$unwind: '$startDates',
+    			},
+    			{
+    				$match: {
+    					startDates: {
+    						$gte: new Date(`${year}-01-01`),
+    						$lte: new Date(`${year}-12-31`),
+    					},
+    				},
+    			},
+    			{
+    				$group: {
+    					_id: { $month: '$startDates' },
+    					numTourStarts: { $sum: 1 },
+    					tours: { $push: '$name' },
+    				},
+    			},
+    			{
+    				$addFields: { month: '$_id' },
+    			},
+    			{
+    				$project: {
+    					_id: 0,
+    				},
+    			},
+    			{
+    				$sort: { numTourStarts: -1 },
+    			},
+    			{
+    				$limit: 12,
+    			},
+    		]);
+
+    		res.status(200).json({
+    			status: 'success',
+    			data: {
+    				plan,
+    			},
+    		});
+    	} catch (err) {
+    		res.status(400).json({
+    			status: 'fail',
+    			message: err,
+    		});
+    	}
+    };
+    ```
+
+## Virtual Properties
+
+1. Virtual properties are document properties that you can get and set but that do not get persisted to MongoDB. The getters are useful for formatting or combining fields, while setters are useful for de-composing a single value into multiple values for storage.
+2. For example, we can create a virtual property called `durationWeeks` that calculates the duration of a tour in weeks based on the `duration` field (which is in days).
+    ```javascript
+    tourSchema.virtual('durationInWeeks').get(function () {
+    	// We used Regular Function instead of arrow function because we need access to `this` keyword
+    	return this.duration / 7;
+    }); // This Virtual property will be created each time we get data from the database.
+    ```
+3. To 'enable' virtual properties to be included in the output when using `res.json()` or `res.send()`, we need to set the `toJSON` and `toObject` options in the schema as follows:
+    ```javascript
+    const tourSchema = new mongoose.Schema(
+    	{
+    		// Schema Definition
+    	},
+    	{
+    		toJSON: { virtuals: true },
+    		toObject: { virtuals: true },
+    	},
+    );
+    ```
+4. Now, whenever we get a tour document from the database, the `durationInWeeks` virtual property will be included in the output.
+
+## Mongoose Middlewares
+
+Mongoose, just like Express, also supports middlewares. These middlewares are also called pre and post hooks.
+
+### Document Middleware
+
+1. Document middleware is executed before or after certain document methods. These methods are `save()` and `create()`.
+2. Document middleware has access to the document being processed via the `this` keyword.
+3. To define a document middleware, we use the `pre` and `post` methods on the schema.
+
+    ```javascript
+    // Pre Middleware
+    tourSchema.pre('save', function (next) {
+    	this.slug = slugify(this.name, { lower: true });
+    	next();
+    });
+
+    // Post Middleware
+    tourSchema.post('save', function (doc, next) {
+    	console.log(doc);
+    	next();
+    });
+    ```
+
+4. In the above example, the pre middleware will run before a document is saved to the database and will create a slug from the name of the tour. The post middleware will run after the document is saved and will log the document to the console.
+
+### Query Middleware
+
+1. Query middleware is executed before or after certain query methods. These methods are `find()`, `findOne()`, `findById()`, etc.
+2. Query middleware has access to the query being processed via the `this` keyword.
+3. An example is implemented in the `tourModel.js` file in the models folder.
+
+    ```javascript
+    // QUERY MIDDLEWARE: runs before executing a query
+
+    // This middleware is using `find` and not `findOne`
+    // let timeTaken;
+    // tourSchema.pre('find', function (next) {
+    tourSchema.pre(/^find/, function (next) {
+    	// timeTaken = Date.now();
+    	this.start = Date.now();
+    	this.find({ secretTour: { $ne: true } });
+    	next();
+    });
+
+    tourSchema.post(/^find/, function (docs, next) {
+    	// timeTaken = Date.now() - timeTaken;
+    	console.log(
+    		`Process took ${Date.now() - this.start}ms.`,
+    	);
+    	next();
+    });
+    ```
+
+4. In the above example, the pre middleware will run before any `find` query is executed and will exclude all documents that have the `secretTour` field set to true. The post middleware will run after the query is executed and will log the time taken to execute the query.
+
+### Aggregation Middleware
+
+1. Aggregation middleware is executed before or after an aggregation operation is executed.
+2. Aggregation middleware has access to the aggregation object being processed via the `this` keyword.
+3. An example is implemented in the `tourModel.js` file in the models folder.
+    ```javascript
+    // AGGREGATION MIDDLEWARE: runs before executing an aggregation
+    tourSchema.pre('aggregate', function (next) {
+    	this.pipeline().unshift({
+    		$match: { secretTour: { $ne: true } },
+    	});
+    	console.log(this.pipeline());
+    	next();
+    });
+    ```
+
+## Data Validation for Mongoose Models
+
+Mongoose provides built-in validators for schema types, as well as the ability to create custom validation logic.
+
+### Built-in Validators
+
+1. A few methods not mentioned before are:
+    - `min` and `max` for Number type.
+    - `enum` for String type.
+    - `match` for String type to match a regular expression.
+2. Example:
+    ```javascript
+    //...
+    maxLength: [
+    	40,
+    	'A Tour Name cannot be longer than 40 characters',
+    ],
+    //...
+    enum: {
+    	values: ['easy', 'medium', 'difficult'],
+    	message:
+    	    'A tour difficulty can either be easy, medium and difficult',
+    },
+    ```
+
+### Third-Party Validators
+
+1. We can use third-party validators such as the `validator` package.
+2. First, install the package:
+    ```bash
+    npm i validator
+    ```
+3. Then, import the package in the model file and use its methods in the schema definition.
+    ```javascript
+    const validator = require('validator');
+    //...
+    email: {
+    	type: String,
+    	required: [true, 'User must have an email'],
+    	unique: true,
+    	lowercase: true,
+    	validate: [validator.isEmail, 'Please provide a valid email'],
+    },
+    ```
+
+### Custom Validators
+
+1. One can also create custom validators by defining a `validate` property in the schema definition.
+
+    ```javascript
+    validate: {
+    	validator: function (val) {
+    	// this only points to current doc on NEW document creation.
+    	// Means it wont work if only the discount price is being updated.
+    	return val < this.price;
+    	},
+    	message:
+    	    'Discount Price ({VALUE}) should be below the regular price',
+    },
+    ```
+
+    - The `validator` property is a function that takes the value to be validated as an argument and returns true if the value is valid, or false if it is not.
+
+# Implementing Proper Error Handling
+
+## Using `ndb` for Debugging
+
+1. `ndb` stands for "Node Debugger", it's a debugging tool developed by Google which provide a headless chrome window for debugging and be more productive.
+2. ndb can be installed globally using the terminal command:
+    ```bash
+    npm i ndb --global
+    ```
+3. Add the script to your `package.json` file:
+    ```json
+    //...
+    "debug": "ndb server.js",
+    ```
+4. Run the script in your terminal to begin debugging.
+    ```bash
+    npm run debug
+    ```
+5. This will open a new window also known as 'Headless Chrome' which provides tools such as setting breakpoints and also step-forward and step-backward functionality.
+
+## Handling Unhandled Routes
+
+1. In a api, there is only a limited routes that are handled/they act as the actual resource routes of the api. All other routes are useless and must be ignored.
+2. Good thing is that Express offers middleware for this sort of handling. Such middleware is explained in the next section.
+    ```javascript
+    // The above middlewares/route-handlers didn't catch this route, so it must be undefined
+    // `all() method handles all http methods
+    // '*' means all the routes
+    app.all('*', (req, res, next) => {
+    	next(
+    		new AppError(
+    			`404! Page not Found at '${req.originalUrl}' on this server.`,
+    			404,
+    		),
+    	);
+    });
+    ```
+3. In express, middleware in which the `next()` method accepts an argument automatically treated as the error handling middleware. When such a middleware comes in the stack, express will skip all other middlewares and go directly to the error handling middleware. This is further explained in the next section.
+4. In the above code, we created a new utility class `AppError` to generate errors with custom error messages.
+
+    ```javascript
+    class AppError extends Error {
+    	constructor(message, statusCode) {
+    		super(message);
+    		this.statusCode = statusCode;
+    		this.status = `${statusCode}`.startsWith('4')
+    			? 'fail'
+    			: 'error';
+    		this.isOperational = true;
+    		Error.captureStackTrace(this, this.constructor);
+    		// When an object is created, it'll not pollute the original Error object's stack trace.
+    	}
+    }
+    module.exports = AppError;
+    ```
+
+## Creating a Global Error Handling Middleware
+
+1. In the `app.js` file, create a new middleware at the end of all other middlewares. This is a global error handling middleware. So it must accept 4 arguments:
+
+    ```javascript
+    //...
+    app.use((err, req, res, next) => {
+    	err.statusCode = err.statusCode || 500;
+    	err.status = err.status || 'error';
+    	res.status(err.statusCode).json({
+    		status: err.status,
+    		message: err.message,
+    	});
+    });
+    ```
+
+2. This special middleware will now catch all errors that are passed to the `next()` method in any other middleware or route handler.
+
+## Refactoring the Global Error Handling Middleware
+
+1. To improve the error handling middleware, we can create a new file `controllers/errorController.js` and move the error handling middleware there. This method can then be exported and imported in the `app.js` file.
+2. In this file, we can also create different functions to handle different types of errors.
+
+## Catching errors in Async Functions
+
+1. To catch errors in async functions, we follow a standard procedure of making a new utility function that accepts an async function as an argument and returns a new function that catches any errors and passes them to the next middleware.
+2. Create a new file `utils/catchAsync.js` and add the following code:
+    ```javascript
+    module.exports = (fn) => {
+    	return (req, res, next) => {
+    		fn(req, res, next).catch(next);
+    	};
+    };
+    ```
+3. Now, in the controller, import this function and wrap all async functions with it.
+    ```javascript
+    const catchAsync = require('./../utils/catchAsync');
+    //...
+    exports.getAllTours = catchAsync(
+    	async (req, res, next) => {
+    		//...
+    	},
+    );
+    exports.getTour = catchAsync(async (req, res, next) => {
+    	//...
+    });
+    //...
+    ```
+4. This way, any error that occurs in the async function will be caught and passed to the next middleware, which is the error handling middleware.
+5. This is done instead of using simple try-catch blocks to improve code readability and maintainability.
+
+## Using Correct HTTP Codes for Certain errors
+
+1. In the resource controller, there are certain http status codes that must be used for certain errors. For example, when a resource is not found, the status code must be `404`.
+    ```javascript
+    exports.getTour = catchAsync(async (req, res, next) => {
+    	//Tour.findOne({ _id: req.params.id})
+    	const tour = await Tour.findById(req.params.id);
+    	res.status(200).json({
+    		status: 'success',
+    		data: { tour },
+    	});
+    });
+    ```
+2. In the above code, if the tour with the given id is not found, the `tour` object will be `null`. So, we need to check for this and return a `404` status code.
+    ```javascript
+    if (!tour) {
+    	return next(
+    		new AppError('No tour found with that ID', 404),
+    	);
+    }
+    ```
+3. When the `next()` method is called with an argument, express will skip all other middlewares and go directly to the error handling middleware.
+4. Same should be done for all other similar methods.
+
+## Errors in Development Vs Production
+
+1. In development, we want to see the full error details to help us debug the error. But in production, we want to show a generic message to the user and log the full error details for ourselves.
+2. It starts with making changes in the error handling middleware in the `errorController.js` file.
+
+    ```javascript
+    const sendErrorDev = (err, req, res) => {
+    	res.status(err.statusCode).json({
+    		status: err.status,
+    		error: err,
+    		message: err.message,
+    		stack: err.stack,
+    	});
+    };
+
+    const sendErrorProd = (err, req, res) => {
+    	// Operational, trusted error: send message to client
+    	if (err.isOperational) {
+    		res.status(err.statusCode).json({
+    			status: err.status,
+    			message: err.message,
+    		});
+
+    		// Programming or other unknown error: don't leak error details
+    	} else {
+    		// 1) Log error
+    		console.error('ERROR 💥', err);
+
+    		// 2) Send generic message
+    		res.status(500).json({
+    			status: 'error',
+    			message: 'Something went very wrong!',
+    		});
+    	}
+    };
+    ```
+
+3. Now, in the main error handling middleware, we can check the environment and call the appropriate function.
+
+    ```javascript
+    module.exports = (err, req, res, next) => {
+    	err.statusCode = err.statusCode || 500;
+    	err.status = err.status || 'error';
+
+    	if (process.env.NODE_ENV === 'development') {
+    		sendErrorDev(err, req, res);
+    	} else if (process.env.NODE_ENV === 'production') {
+    		let error = { ...err };
+    		error.message = err.message;
+
+    		// Handle specific errors here
+
+    		sendErrorProd(error, req, res);
+    	}
+    };
+    ```
+
+4. Now, we can handle specific errors in the production environment by checking the error type and creating a new `AppError` with a custom message and status code.
+
+    ```javascript
+    if (error.name === 'CastError')
+    	error = handleCastErrorDB(error);
+    if (error.code === 11000)
+    	error = handleDuplicateFieldsDB(error);
+    if (error.name === 'ValidationError')
+    	error = handleValidationErrorDB(error);
+    ```
+
+5. Each of the above mentioned methods can be defined as follows:
+    ```javascript
+    const handleCastErrorDB = (err) => {
+    	const message = `Invalid ${err.path}: ${err.value}`;
+    	return new AppError(message, 400);
+    };
+    const handleDuplicateFieldsDB = (err) => {
+    	// THIS SOLUTION WAS SUGGESTED BY CHATGPT
+    	// IT WORKS, BUT I PREFER THE ONE BELOW
+    	// const match = err.message.match(/(["'])(.*?)\1/);
+    	// console.log(match);
+    	// const value = match ? match[2] : 'unknown';
+    	const match = err.message.match(
+    		/(["'])(\\?.)*?\1/,
+    	)[0];
+    	const message = `Duplicate Field Value: ${match}. Please use another value!`;
+    	return new AppError(message, 400);
+    };
+    const handleValidationErrorDB = (err) => {
+    	const errors = Object.values(err.errors).map(
+    		(el) => el.message,
+    	);
+    	const message = `Invalid Input Data. ${errors.join('. ')}`;
+    	return new AppError(message, 400);
+    };
+    ```
+
+## Errors Outside Express
+
+1. Sometimes, there are errors that occur outside the express framework. For example, an unhandled promise rejection or an uncaught exception.
+2. To handle these errors, we can use the `process` object in Node.js.
+3. For unhandled promise rejections, we can use the `unhandledRejection` event.
+    ```javascript
+    process.on('unhandledRejection', (err) => {
+    	console.log(
+    		'UNHANDLED REJECTION! 💥 Shutting down...',
+    	);
+    	console.log(err.name, err.message);
+    	server.close(() => {
+    		process.exit(1);
+    	});
+    });
+    ```
+4. For uncaught exceptions, we can use the `uncaughtException` event.
+    ```javascript
+    process.on('uncaughtException', (err) => {
+    	console.log(
+    		'UNCAUGHT EXCEPTION! 💥 Shutting down...',
+    	);
+    	console.log(err.name, err.message);
+    	process.exit(1);
+    });
+    ```
+
+- NOTE: The above code must be placed in the `server.js` file before any other code to ensure that it catches all errors.

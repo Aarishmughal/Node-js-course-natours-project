@@ -19,6 +19,8 @@
 // IMPORTS
 const express = require('express');
 const morgan = require('morgan');
+const AppError = require('./utils/appError');
+const globalErrorHandler = require('./controllers/errorController');
 const tourRouter = require('./routes/tourRoutes');
 const userRouter = require('./routes/userRoutes');
 
@@ -41,5 +43,18 @@ app.use((req, res, next) => {
 app.use('/api/v1/tours', tourRouter);
 app.use('/api/v1/users', userRouter);
 
+// The above middlewares/route-handlers didn't catch this route, so it must be undefined
+// `all() method handles all http methods
+// '*' means all the routes
+app.all('*', (req, res, next) => {
+	next(
+		new AppError(
+			`404! Page not Found at '${req.originalUrl}' on this server.`,
+			404,
+		),
+	);
+});
+
+app.use(globalErrorHandler);
 // GOING INTO SERVER.js
 module.exports = app;
