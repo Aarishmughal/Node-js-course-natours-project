@@ -1,24 +1,12 @@
-/**
- * Express application for the Natours API.
- *
- * - Loads tour data from a JSON file.
- * - Provides RESTful endpoints to get all tours, get a tour by ID, create a new tour, and update a tour.
- *
- * Endpoints:
- *   GET    /api/v1/tours         - Returns all tours.
- *   GET    /api/v1/tours/:id     - Returns a single tour by ID.
- *   POST   /api/v1/tours         - Creates a new tour.
- *   PATCH  /api/v1/tours/:id     - Updates an existing tour (not yet implemented).
- *   DELETE  /api/v1/tours/:id    - Deletes an existing tour (not yet implemented).
- *
- * @module app
- * @requires express
- * @requires fs
- */
-
 // IMPORTS
 const express = require('express');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const mongoSanitize = require('express-mongo-sanitize');
+const xss = require('xss-clean');
+const hpp = require('hpp');
+
 const AppError = require('./utils/appError');
 const globalErrorHandler = require('./controllers/errorController');
 const tourRouter = require('./routes/tourRoutes');
@@ -28,12 +16,52 @@ const userRouter = require('./routes/userRoutes');
 const app = express();
 
 // MIDDLEWARE(s)
+// Development Logging
 if (process.env.NODE_ENV === 'development') {
 	app.use(morgan('dev'));
 }
-app.use(express.json());
+
+// Security HTTP Headers
+app.use(helmet());
+// Limit Requests on same API
+const limiter = rateLimit({
+	max: 100, // max requests
+	windowMs: 60 * 60 * 1000, // 1 hour in milliseconds
+	message:
+		'Too many requests from this IP, please try again in an hour!',
+});
+app.use('/api/v1', limiter); // Apply to all routes that start with /api
+
+// Body Parser, reading data from body into req.body
+app.use(express.json({ limit: '10kb' })); // Body size limit
+
+// Data Sanitization against NoSQL query injection
+app.use(mongoSanitize());
+
+// Data Sanitization against XSS (Cross Site Scripting) attacks
+// Removes HTML and JS code from input
+app.use(xss());
+
+// HTTP Parameter Pollution Protection: Clears up the Query String
+// Alters Query String so that it uses only the last parameter
+// Whitelist: Allows duplicates for specified parameters
+app.use(
+	hpp({
+		whitelist: [
+			'duration',
+			'ratingsAverage',
+			'ratingsQuantity',
+			'maxGroupSize',
+			'difficulty',
+			'price',
+		],
+	}),
+);
+
+// Serving Static Files
 app.use(express.static(`${__dirname}/public`));
 
+// Test Middleware
 app.use((req, res, next) => {
 	req.requestTime = new Date().toISOString();
 	next();
