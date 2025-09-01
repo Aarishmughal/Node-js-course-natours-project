@@ -52,6 +52,32 @@
     - [Third Party Validators](#third-party-validators)
     - [Custom Validators](#custom-validators)
 
+**[Implementing Proper Error Handling](#implementing-proper-error-handling)**
+
+- [Using `ndb` for Debugging](#using-ndb-for-debugging)
+- [Handling Unhandled Routes](#handling-unhandled-routes)
+- [Creating a Global Error Handling Middleware](#creating-a-global-error-handling-middleware)
+- [Refactoring the Global Error Handling Middleware](#refactoring-the-global-error-handling-middleware)
+- [Catching errors in Async Functions](#catching-errors-in-async-functions)
+- [Using Correct HTTP Codes for Certain errors](#using-correct-http-codes-for-certain-errors)
+- [Errors in Development Vs Production](#errors-in-development-vs-production)
+- [Errors Outside Express](#errors-outside-express)
+
+**[Implementing Security Measures](#implementing-security-measures)**
+
+- [Making Model Fields Secure](#making-model-fields-secure)
+- [Authentication Processes](#authentication-processes)
+- [Advanced Postman Setup](#advanced-postman-setup)
+- [Sending User's Emails using NodeMailer](#sending-users-emails-using-nodemailer)
+- [Implementing updateMe & deleteMe Methods](#implementing-updateme--deleteme-methods)
+    - [`updateMe()`](#updateme)
+    - [`deleteMe()`](#deleteme)
+- [Implementing Other Useful Techniques](#implementing-other-useful-techniques)
+    - [Rate Limiting](#rate-limiting)
+    - [Security HTTP Headers](#security-http-headers)
+    - [Data Sanitization](#data-sanitization)
+    - [HTTP Parameter Pollution](#http-parameter-pollution)
+
 # Express.JS
 
 Express is a minimal Node.JS framework which means it is built on top of Node.JS. It allows us to develop applications much faster as it comes out-of-box with great features like:
@@ -1483,3 +1509,729 @@ Mongoose provides built-in validators for schema types, as well as the ability t
     ```
 
 - NOTE: The above code must be placed in the `server.js` file before any other code to ensure that it catches all errors.
+
+# Implementing Security Measures
+
+There are quite a few security measures that can be implemented to make the app more secure. These measures prevent from leaking sensitive data and also prevent from attacks such as NoSQL query injection, XSS, etc. Following packages are installed before working with the code snippets below:
+
+- `bcryptjs`
+- `nodemailer`
+- `jsonwebtoken`
+
+In the later section,
+
+- `express-mongo-sanitize`
+- `express-rate-limit`
+- `helmet`
+- `hpp`
+- `xss-clean`
+
+## Making Model Fields Secure
+
+1. Using proper validation to the model makes a big difference. Below is an example of a proper implementation of a user Schema with proper validation rules.
+
+    ```javascript
+    const userSchema = new mongoose.Schema({
+    	name: {
+    		type: String,
+    		required: [true, 'User Name is missing'],
+    		trim: true,
+    	},
+    	email: {
+    		type: String,
+    		required: [
+    			true,
+    			'User Email Address is missing',
+    		],
+    		unique: true,
+    		lowercase: true,
+    		validate: [
+    			validator.isEmail,
+    			'Provide Email Address is invalid',
+    		],
+    		trim: true,
+    	},
+    	photo: {
+    		type: String,
+    	},
+    	role: {
+    		type: String,
+    		enum: ['user', 'guide', 'lead-guide', 'admin'],
+    		default: 'user',
+    	},
+    	password: {
+    		type: String,
+    		required: ['true', 'User Password is missing'],
+    		minLength: [
+    			8,
+    			'Password must be atleast 8 characters',
+    		],
+    		trim: true,
+    		select: false, // Never shows up in any select outputs
+    	},
+    	passwordConfirm: {
+    		type: String,
+    		required: [
+    			'true',
+    			'User Passwords do not match',
+    		],
+    		trim: true,
+    		validate: {
+    			// This Custom validator only works on save.
+    			validator: function (el) {
+    				return el === this.password;
+    			},
+    			message: 'User Passwords do not match',
+    		},
+    	},
+    	passwordChangedAt: { type: Date },
+    	passwordResetToken: String,
+    	passwordResetExpires: Date,
+    	active: {
+    		type: Boolean,
+    		default: true,
+    		select: false,
+    	},
+    });
+    ```
+
+2. Make sure to never store the user password in the database. Always use hashing and encryption algorithms to hash the user password. This way, if a hacker gets access to the database somehow, they still do not have access to the users' passwords.
+
+    ```javascript
+    // Password Hashing Middleware
+    userSchema.pre('save', async function (next) {
+    	// Skip this middleware if Password wasn't modified
+    	if (!this.isModified('password')) return next();
+
+    	// Hash the Password with a cost of 12
+    	this.password = await bcrypt.hash(
+    		this.password,
+    		12,
+    	);
+    	// Delete the PasswordConfirm field
+    	this.passwordConfirm = undefined;
+    	next();
+    });
+    ```
+
+3. Below is a proper implementation of a middleware function that updates the user `passwordChangedAt` property:
+    ```javascript
+    userSchema.pre('save', function (next) {
+    	if (!this.isModified('password') || this.isNew)
+    		return next();
+    	this.passwordChangedAt = Date.now() - 1000; // Ensures that the token is always created after the password has been changed
+    	next();
+    });
+    ```
+4. Below is an implementation of an INSTANCE METHOD on the User schema that is to compare user passwords. Basically used to perform login/reset actions to compare provided string with the user's hashed password stored in the database:
+    ```javascript
+    userSchema.methods.correctPassword = async function (
+    	candidatePassword,
+    	userPassword,
+    ) {
+    	// `this.password` won't be available
+    	return await bcrypt.compare(
+    		candidatePassword,
+    		userPassword,
+    	);
+    };
+    ```
+5. Below is an instance method that checks if JWT is older than the value of the property of `changedPasswordAt`. This method is important for Authentication processes:
+    ```javascript
+    userSchema.methods.changedPasswordAfter = function (
+    	JWTTimeStamp,
+    ) {
+    	if (this.passwordChangedAt) {
+    		const changedTimestamp = parseInt(
+    			this.passwordChangedAt.getTime() / 1000,
+    			10, //Base-10
+    		);
+    		return JWTTimeStamp < changedTimestamp; //100 < 200
+    	}
+    	// Default False: Means password is not changed
+    	return false;
+    };
+    ```
+6. This Instance method provides a random token that is used for password reset purposes. This method also stores a HASHed version of this random token in the document along with an expiry date of this token:
+    ```javascript
+    userSchema.methods.createPasswordResetToken =
+    	function () {
+    		const token = crypto
+    			.randomBytes(32)
+    			.toString('hex');
+    		this.passwordResetToken = crypto
+    			.createHash('sha256')
+    			.update(token)
+    			.digest('hex');
+    		this.passwordResetExpires =
+    			Date.now() + 10 * 60 * 1000; // Minutes * Seconds * MilSeconds
+    		return token;
+    	};
+    ```
+
+## Authentication Processes
+
+In this section, we discuss important methods related to `authenticating` a user to our system. These methods include signup, login, protect, frogotPassword, resetPassword, etc. Few setups to note before we continue into the section are as follows:
+
+1. These methods lie in a new controller called `authController`.
+2. Some methods will be called into other route Controllers such as `tourRoutes`, `userRoutes`.
+3. Important environment variables are stored in the `config.env` file as usual and not in the code.
+4. This is based on the working of JSON Web Tokens.
+
+    ```
+                ┌───────────────────────┐
+                │       CLIENT          │
+                └──────────┬────────────┘
+                           │
+             [1] Login Request (POST /login)
+                           │  username, password
+                           ▼
+                ┌───────────────────────┐
+                │        SERVER         │
+                └──────────┬────────────┘
+                           │
+                Validate user credentials
+                           │
+             [2] Generate JWT:
+                 HEADER + PAYLOAD + SIGNATURE
+                 (signed with secret key)
+                           │
+                           ▼
+                ┌───────────────────────┐
+                │       CLIENT          │
+                └──────────┬────────────┘
+                           │
+             [3] Receives token & stores
+                 (localStorage, cookie, etc.)
+                           │
+             [4] Makes requests to
+                 protected routes with:
+                 Authorization: Bearer <token>
+                           │
+                           ▼
+                ┌───────────────────────┐
+                │        SERVER         │
+                └──────────┬────────────┘
+                           │
+             [5] Verify Token:
+                 - Decode HEADER & PAYLOAD
+                 - Re-hash HEADER+PAYLOAD with secret
+                 - Compare with SIGNATURE
+                 - Check exp (expiration)
+                           │
+             [6] If valid, grant access
+                 Else, return 401 Unauthorized
+                           │
+                           ▼
+                ┌────────────────────────┐
+                │       RESPONSE         │
+                └────────────────────────┘
+    ```
+
+### Signing Up New Users
+
+Signing up new users consists of following steps:
+
+0. Perform validation for fields?
+    - This is done automatically in the schema.
+
+1. Get necessary details from the user and nothing more, and create a new user.
+    ```javascript
+    const newUser = await User.create({
+    	name: req.body.name,
+    	email: req.body.email,
+    	password: req.body.password,
+    	passwordConfirm: req.body.passwordConfirm,
+    });
+    ```
+2. Sign the JWT with the user and the SECRET from the .env file.
+    ```javascript
+    const token = jwt.sign({ newUser._id }, process.env.JWT_SECRET, {
+    	expiresIn: process.env.JWT_EXPIRES_IN,
+    });
+    ```
+3. Define Cookie options.
+    ```javascript
+    const cookieOptions = {
+    	expires: new Date(
+    		Date.now() +
+    			process.env.JWT_COOKIE_EXPIRES_IN *
+    				24 *
+    				60 *
+    				60 *
+    				1000,
+    	),
+    	httpOnly: true,
+    	//secure: true, // Cookie will only be sent on an encrypted connection (HTTPS)
+    };
+    if (process.env.NODE_ENV === 'production')
+    	cookieOptions.secure = true;
+    ```
+4. Remove user password from the output.
+    ```javascript
+    // Remove password from output
+    user.password = undefined;
+    ```
+5. Append the cookie object with the response object and send the response with the token.
+    ```javascript
+    res.cookie('jwt', token, cookieOptions);
+    res.status(statusCode).json({
+    	status: 'success',
+    	token,
+    });
+    ```
+
+### Logging in the Existing Users
+
+Similar to Signup process, logging in existing users is also comprised of a few steps.
+
+1. Destructuring the `req.body` object.
+    ```javascript
+    const { email, password } = req.body;
+    ```
+2. Validate if fields exist and not empty.
+    ```javascript
+    if (!email || !password) {
+    	return next(new AppError('Invalid Input', 400));
+    }
+    ```
+3. Check if user exists with the provided email.
+
+    ```javascript
+    const user = await User.findOne({ email }).select(
+    	'+password',
+    );
+    if (!user) {
+    	//...Generate Error
+    }
+    ```
+
+4. Compare password by calling the Instance Method defined in the schema.
+    ```javascript
+    const result = await user.correctPassword(
+    	password,
+    	user.password,
+    );
+    if (!result) {
+    	//...Generate Error
+    }
+    ```
+
+- The error handling work in Step 03 & 04 is combined to work together to save performance resources. This way there would be no comparison needed in case user doesn't exists with the provided email address.
+    ```javascript
+    if (
+    	!user ||
+    	!(await user.correctPassword(
+    		password,
+    		user.password,
+    	))
+    )
+    ```
+
+5. If all goes good, send the JWT to the client.
+    ```javascript
+    createAndSendToken(user, 200, res);
+    ```
+
+- This method `createAndSendToken` is the implementation of Step 02 and onwards in the Signup process.
+
+### Implementing a Protect Method
+
+The purpose of this method is to act as a middleware for some routes so that they can be only accessed by authorized users. It consists of the following steps:
+
+1. Check if the request consists of a `authorization` header value and if this value starts with the word `Bearer`. Extract & Save the token in the token variable if all true else, throw error.
+
+    ```javascript
+    let token;
+    if (
+    	req.headers.authorization &&
+    	req.headers.authorization.startsWith('Bearer')
+    ) {
+    	// Split the value string at ' '
+    	// And take the 2nd value in the array
+    	token = req.headers.authorization.split(' ')[1];
+    }
+    if (!token) {
+    	return next(
+    		new AppError(
+    			'Unable to Login at the moment',
+    			401,
+    		),
+    	);
+    }
+    ```
+
+2. Verify the token using the `verify` method. We also want to store the decodedToken in a new Variable which is possible by converting the method into a promise. This is done with the help of the `promisify` method from the node `util` module.
+    ```javascript
+    const { promisify } = require('util');
+    //...
+    const decodedToken = await promisify(jwt.verify){
+        token,process.env.JWT_SECRET
+    };
+    ```
+3. Check if user exists against the `id` in the decoded token.
+    ```javascript
+    const user = await User.findById(decodedToken.id);
+    if (!user) {
+    	// Throw error
+    }
+    ```
+4. Important Step: Check if User has changed their password after the token was issued. In other words, if JWT_Date > password_change_date.
+    ```javascript
+    if (user.changedPasswordAfter(decodedToken.iat)) {
+    	//Throw Error
+    }
+    ```
+5. Append the `user` object to the `req` object and send to next middleware.
+    ```javascript
+    req.user = user;
+    next();
+    ```
+
+### Implementing a RestrictTo Method
+
+This method acts as a middleware and restricts a certain route to specified users based on their `role` in the schema.
+
+1. This method is rather different than all others and actually returns another function which is similar to the rest.
+    ```javascript
+    restrictTo = (...userRoles) => {
+    	return (req, res, next) => {
+    		// userRoles is an array: ['admin', 'user']
+    		if (!userRoles.includes(req.user.role)) {
+    			return next(
+    				new AppError(
+    					'Current User is not Authorized to perform this action',
+    					403,
+    				),
+    			);
+    		}
+    		next();
+    	};
+    };
+    ```
+2. Step 01: Check if the arguement array `userRoles` includes the role of the currently logged in user, the user whose data is saved in the `req` object.
+3. If it does, skip to next middleware, if not throw an error.
+
+### Forget Password Functionality
+
+The forget password functionality is divided into two separate methods.
+
+- Sending the Email. - (`forgotPassword`())
+- Resetting the Password with the URL in Email. - (`resetPassword`())
+
+Both these methods are divided into the following steps:
+
+1. Starting with the `forgotPassword` method, we first get the email address from the `req.body` object and get user from model.
+    ```javascript
+    const { email } = req.body;
+    const user = await User.findOne({ email });
+    if (!user) {
+    	//Throw Error
+    }
+    ```
+2. Generate a random Reset token by using the instance method on the schema. Call the `.save()` method on the `user` document that was just fetched.
+    ```javascript
+    const resetToken = user.createPasswordResetToken();
+    await user.save({ validateBeforeSave: false });
+    ```
+3. Generate a reset URL and send it to the user's email address.
+    ```javascript
+    const resetURL = `${req.protocol}://${req.get(
+    	'host',
+    )}/api/v1/users/resetPassword/${resetToken}`;
+    const message = `Forgot your password? Submit a PATCH request with your new password and passwordConfirm to: ${resetURL}.\nIf you didn't forget your password, please ignore this email!`;
+    try {
+    	await sendEmail({
+    		email: user.email,
+    		subject:
+    			'Your password reset token (valid for 10 min)',
+    		message,
+    	});
+    	res.status(200).json({
+    		status: 'success',
+    		message: 'Token sent to email!',
+    	});
+    } catch (err) {
+    	user.passwordResetToken = undefined;
+    	user.passwordResetExpires = undefined;
+    	await user.save({ validateBeforeSave: false });
+    	return next(
+    		new AppError(
+    			'There was an error sending the email. Try again later!',
+    			500,
+    		),
+    	);
+    }
+    ```
+
+- The `sendEmail` method is defined ane explained in a separate section below.
+
+4. Send a nice response to the client if all goes well.
+    ```javascript
+    res.status(200).json({
+    	status: 'success',
+    	message: 'Token sent to email!',
+    });
+    ```
+5. Here begins the process after the user clicks the link in the email, the resetPassword method. Get the hashedToken from the URL params.
+    ```javascript
+    const hashedToken = crypto
+    	.createHash('sha256')
+    	.update(req.params.token)
+    	.digest('hex');
+    ```
+6. Use this hashedToken to find the user and also check if the token is not expired.
+    ```javascript
+    const user = await User.findOne({
+    	passwordResetToken: hashedToken,
+    	passwordResetExpires: { $gt: Date.now() },
+    });
+    ```
+
+- The passwordResetToken was hashed and stored in the database when it was created. So we need to hash the token from the URL to compare.
+
+7. If user doesn't exist, throw error.
+    ```javascript
+    if (!user) {
+    	//Throw Error
+    }
+    ```
+8. Set new password and passwordConfirm Values and set the reset token & its expiry to undefined. Remember to call the `save()` method.
+    ```javascript
+    user.password = req.body.password;
+    user.passwordConfirm = req.body.passwordConfirm;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+    ```
+9. Update changedPasswordAt property for the user. Look into this method code in userModel.js.
+    - It is a pre-save middleware.
+    - It will only be executed when the password is modified and the document is not new.
+    - So we don't need to call it here explicitly.
+    - IT SAVES THE TIMES AS `Date.now() - 1000`[Subtracting 1 second] TO MAKE SURE THAT TOKEN IS SIGNED AFTER THE PASSWORD IS CHANGED.
+
+10. Call the `createAndSendToken` method to create and send JWT.
+
+### Update Password Functionality
+
+This functionality allows the user to update their password by using their old password. In other words, a secure route handler that allows the user to change their password.
+
+1. Check if fields exist in the `req.body` object.
+    ```javascript
+    const {
+    		passwordCurrent,
+    		password,
+    		passwordConfirm,
+    	} = req.body;
+    if (
+    		!passwordCurrent ||
+    		!password ||
+    		!passwordConfirm
+    	)
+        // Throw error
+    ```
+2. Get Current user from the database using the id from the `req.user` object (sent from the protect middleware).
+    ```javascript
+    const user = await User.findById(req.user._id).select(
+    	'+password',
+    );
+    ```
+3. Check if the POSTed password matches the user's original password. This is done by using the instance method `correctPassword()`.
+    ```javascript
+    if (
+    		!(await user.correctPassword(
+    			passwordCurrent,
+    			user.password,
+    		))
+    	)
+        // Throw error
+    ```
+4. If all is good, update the user's password.
+    ```javascript
+    user.password = password;
+    user.passwordConfirm = passwordConfirm;
+    await user.save();
+    ```
+5. Send JWT with the response.
+    ```javascript
+    createAndSendToken(user, 200, res);
+    ```
+
+## Advanced Postman Setup
+
+1. Create Environments to work in. This way the domain url can be saved to an environment variable and that variable can then be used in requests instead of the actual url.
+    ```
+    {{URL}}
+    ```
+2. Routes that grant authorization to a user, can use `scripts` to automate saving the JWT recieved from the server to a new environment variable.
+    ```javascript
+    pm.environment.set('jwt', pm.response.json().token);
+    ```
+3. Protected routes can have an authorization technique chosen from the authorization drop-down -> **Bearer Token**.
+    ```
+    {{jwt}}
+    ```
+
+## Sending User's Emails using NodeMailer
+
+1. Create a new Utility function in the `/utils` folder. Impor the `nodemailer` npm package into the module. First step of this function is to create the `transporter` object as below.
+    ```javascript
+    const transporter = nodemailer.createTransport({
+    	// service: 'Gmail',
+    	host: process.env.EMAIL_HOST,
+    	port: process.env.EMAIL_PORT,
+    	auth: {
+    		user: process.env.EMAIL_USERNAME,
+    		pass: process.env.EMAIL_PASSWORD,
+    	},
+    	// Activate the 'less secure app' option in Gmail when using gmail as service
+    });
+    ```
+2. As obvious from the above code snippet, these details are to be stored in the `config.env` file.
+3. Next step is to create another object `mailOptions`.
+    ```javascript
+    const mailOptions = {
+    	from: 'Muhammad Aarish <admin@natours.com>',
+    	to: options.email,
+    	subject: options.subject,
+    	text: options.message,
+    	// html: options.html,
+    };
+    ```
+4. Send the email.
+    ```javascript
+    await transporter.sendMail(mailOptions);
+    ```
+
+## Implementing updateMe & deleteMe Methods
+
+### `updateMe()`
+
+1. Perform Sanitization on the `req.body` object.
+    ```javascript
+    const filterObj = (obj, ...allowedFields) => {
+    	let newObj = {};
+    	Object.keys(obj).forEach((el) => {
+    		if (allowedFields.includes(el)) {
+    			newObj = obj[el];
+    		}
+    	});
+    	return newObj;
+    };
+    //...
+    const filteredBody = filterObj(
+    	req.body,
+    	'name',
+    	'email',
+    );
+    if (req.body.password || req.body.passwordConfirm)// Throw Error
+    ```
+2. Update the user document using the `findByIdAndUpdate` method.
+    ```javascript
+    const user = await User.findByIdAndUpdate(
+    	req.user._id,
+    	filteredBody,
+    	{ new: true, runValidators: true },
+    );
+    ```
+3. Send the response.
+    ```javascript
+    res.status(200).json({
+    	status: 'success',
+    	data: { user },
+    });
+    ```
+
+### `deleteMe()`
+
+When a user wants to delete their account, we don't actually delete the document from the database. Instead, we set an `active` property to `false`. This way, the user can be reactivated later if needed.
+
+1. Find and update the user with their `active` property.
+    ```javascript
+    await User.findByIdAndUpdate(req.user._id, {
+    	active: false,
+    });
+    ```
+2. Send the response to the client.
+    ```javascript
+    res.status(204).json({
+    	status: 'success',
+    	data: null,
+    });
+    ```
+
+## Implementing Other Useful Techniques
+
+### Rate Limiting
+
+Malicious Users can try to send many requests to the server at the same time to make it slow-down or eventually crash the server. We can use an an npm package to limit number of requests from an IP.
+
+1. In `app.js`, require the package `express-rate-limit`.
+    ```javascript
+    const rateLimit = require('express-rate-limit');
+    ```
+2. Create a `limiter` method.
+    ```javascript
+    // Limit Requests on same API
+    const limiter = rateLimit({
+    	max: 100, // max requests
+    	windowMs: 60 * 60 * 1000, // 1 hour in milliseconds
+    	message:
+    		'Too many requests from this IP, please try again in an hour!',
+    });
+    ```
+3. Use this new function as a middelware in the app.
+    ```javascript
+    app.use('/api/v1', limiter); // Apply to all routes that start with /api
+    ```
+
+### Security HTTP Headers
+
+1. Require the npm package `helmet` in the app.
+    ```javascript
+    const helmet = require('helmet');
+    ```
+2. Use this method as a middleware. Make sure to put this middleware method above all other methods.
+    ```javascript
+    // Security HTTP Headers
+    app.use(helmet());
+    ```
+
+### Data Sanitization
+
+1. To sanitize the data coming from the client, we can use the npm packages `express-mongo-sanitize` and `xss-clean`.
+2. Use these middlewares in the app.
+
+    ```javascript
+    // Body Parser, reading data from body into req.body
+    app.use(express.json({ limit: '10kb' })); // Body size limit
+
+    // Data Sanitization against NoSQL query injection
+    app.use(mongoSanitize());
+
+    // Data Sanitization against XSS (Cross Site Scripting) attacks
+    // Removes HTML and JS code from input
+    app.use(xss());
+    ```
+
+### HTTP Parameter Pollution
+
+1. Use te package `hpp`.
+    ```javascript
+    const hpp = require('hpp');
+    ```
+2. Use the middleware in the app.
+    ```javascript
+    app.use(
+    	hpp({
+    		whitelist: [
+    			'duration',
+    			'ratingsAverage',
+    			'ratingsQuantity',
+    			'maxGroupSize',
+    			'difficulty',
+    			'price',
+    		],
+    	}),
+    );
+    ```
