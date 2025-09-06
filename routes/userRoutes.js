@@ -6,25 +6,6 @@ const router = express.Router();
 
 router.post('/signup', authController.signup);
 router.post('/login', authController.login);
-
-router.patch(
-	'/updateMyPassword',
-	authController.protect,
-	authController.updatePassword,
-);
-
-router.patch(
-	'/updateMe',
-	authController.protect,
-	userController.updateMe,
-);
-
-router.delete(
-	'/deleteMe',
-	authController.protect,
-	userController.deleteMe,
-);
-
 router.post(
 	'/forgotPassword',
 	authController.forgotPassword,
@@ -34,6 +15,25 @@ router.patch(
 	authController.resetPassword,
 );
 
+// THIS METHOD WILL BE USED AS A MIDDLEWARE TO PROTECT ALL THE ROUTES THAT COME AFTER IT
+router.use(authController.protect);
+
+router.get(
+	'/me',
+	userController.getMe,
+	userController.getUser,
+);
+
+router.patch(
+	'/updateMyPassword',
+	authController.updatePassword,
+);
+
+router.patch('/updateMe', userController.updateMe);
+router.delete('/deleteMe', userController.deleteMe);
+
+// ONLY ADMIN CAN ACCESS THE ROUTES THAT COME AFTER THIS MIDDLEWARE
+router.use(authController.restrictTo('admin'));
 router
 	.route('/')
 	.get(userController.getAllUsers)

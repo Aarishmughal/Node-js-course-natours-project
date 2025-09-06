@@ -59,6 +59,8 @@ const tourSchema = new mongoose.Schema(
 				'A Tour cannot have rating more than 5.0',
 			],
 			//Min, max also works on dates
+			set: (val) => Math.round(val * 10) / 10, //4.666666, 46.6666, 47, 4.7
+			// This hack `(*10)/10` is necessary because Math.round returns integers
 		},
 		ratingsQuantity: { type: Number, default: 0 },
 		price: {
@@ -110,6 +112,33 @@ const tourSchema = new mongoose.Schema(
 			},
 		],
 		secretTour: { type: Boolean, default: false },
+		startLocation: {
+			// GeoJSON
+			type: {
+				type: String,
+				default: 'Point',
+				enum: ['Point'],
+			},
+			coordinates: [Number], // Array of numbers: Longitude, Latitude
+			address: String,
+			description: String,
+		},
+		locations: [
+			{
+				// GeoJSON
+				type: {
+					type: String,
+					default: 'Point',
+					enum: ['Point'],
+				},
+				coordinates: [Number], // Array of numbers: Longitude, Latitude
+				address: String,
+				description: String,
+			},
+		],
+		guides: [
+			{ type: mongoose.Schema.ObjectId, ref: 'User' },
+		],
 	},
 	{
 		toJSON: {
@@ -120,6 +149,12 @@ const tourSchema = new mongoose.Schema(
 		},
 	},
 );
+
+tourSchema.index({ price: 1, ratingsAverage: -1 }); // Compound Index
+// price is in ascending order(1) and ratingsAverage is in descending order(-1)
+tourSchema.index({ slug: 1 });
+
+tourSchema.index({ startLocation: '2dsphere' });
 
 // `pre`, `post` are hook names; `save`, `find`, etc are middleware names
 
@@ -151,6 +186,13 @@ tourSchema.pre(/^find/, function (next) {
 	next();
 });
 
+tourSchema.pre(/^find/, function (next) {
+	this.populate({
+		path: 'guides',
+		select: '-__v -passwordChangedAt',
+	}); // Populate 'guides' field with user data
+	next();
+});
 tourSchema.post(/^find/, function (docs, next) {
 	// timeTaken = Date.now() - timeTaken;
 	console.log(
@@ -166,18 +208,25 @@ tourSchema.post(/^find/, function (docs, next) {
 // });
 
 // AGGREGATION MIDDLEWARE: runs before executing an aggregation
-tourSchema.pre('aggregate', function (next) {
-	this.pipeline().unshift({
-		$match: { secretTour: { $ne: true } },
-	});
-	console.log(this.pipeline());
-	next();
-});
+// tourSchema.pre('aggregate', function (next) {
+// 	this.pipeline().unshift({
+// 		$match: { secretTour: { $ne: true } },
+// 	});
+// 	console.log(this.pipeline());
+// 	next();
+// });
 
 tourSchema.virtual('durationInWeeks').get(function () {
 	// We used Regular Function instead of arrow function because we need access to `this` keyword
 	return this.duration / 7;
 }); // This Virtual property will be created each time we get data from the database.
+
+tourSchema.virtual('reviews', {
+	ref: 'Review',
+	foreignField: 'tour',
+	localField: '_id',
+	// Compare `localField` from this Model with `foreignField` from the `ref` Model
+}); // Virtual Populate
 
 const Tour = mongoose.model('Tour', tourSchema);
 

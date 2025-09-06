@@ -489,7 +489,7 @@ router.param('id', tourController.checkId);
 3. Create a `.env` file in the root directory of your project and add your environment variables there:
     ```
     PORT=3000
-    DATABASE_URL=mongodb://localhost:27017/mydatabase
+    DATABASE_URL=mongodb+srv://localhost:27017/mydatabase
     SECRET_KEY=mysecretkey
     ```
 4. In your `app.js` or `server.js`, import the `dotenv` package and call the `config()` method to load the environment variables:

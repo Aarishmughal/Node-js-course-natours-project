@@ -1,6 +1,7 @@
 const User = require('../models/userModel');
 const AppError = require('../utils/appError');
 const catchAsync = require('../utils/catchAsync');
+const factory = require('./handlerFactory');
 
 const filterObj = (obj, ...allowedFields) => {
 	let newObj = {};
@@ -11,25 +12,9 @@ const filterObj = (obj, ...allowedFields) => {
 	});
 	return newObj;
 };
-exports.getAllUsers = catchAsync(async (req, res, next) => {
-	const users = await User.find();
-	res.status(200).json({
-		status: 'success',
-		results: users.length,
-		data: { users },
-	});
-});
-exports.getUser = (req, res) => {
-	res.status(500).json({
-		status: 'error',
-		message: 'This route is not defined yet.',
-	});
-};
-exports.createUser = (req, res) => {
-	res.status(500).json({
-		status: 'error',
-		message: 'This route is not defined yet.',
-	});
+exports.getMe = (req, res, next) => {
+	req.params.id = req.user._id;
+	next();
 };
 exports.updateMe = catchAsync(async (req, res, next) => {
 	// STEP 00: Perform Sanitization
@@ -71,15 +56,8 @@ exports.deleteMe = catchAsync(async (req, res, next) => {
 		data: null,
 	});
 });
-exports.updateUser = (req, res) => {
-	res.status(500).json({
-		status: 'error',
-		message: 'This route is not defined yet.',
-	});
-};
-exports.deleteUser = (req, res) => {
-	res.status(500).json({
-		status: 'error',
-		message: 'This route is not defined yet.',
-	});
-};
+exports.getAllUsers = factory.getAll(User);
+exports.getUser = factory.getOne(User);
+exports.createUser = factory.createOne(User);
+exports.updateUser = factory.updateOne(User);
+exports.deleteUser = factory.deleteOne(User);
