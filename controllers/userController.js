@@ -7,7 +7,7 @@ const filterObj = (obj, ...allowedFields) => {
 	let newObj = {};
 	Object.keys(obj).forEach((el) => {
 		if (allowedFields.includes(el)) {
-			newObj = obj[el];
+			newObj[el] = obj[el];
 		}
 	});
 	return newObj;
@@ -17,6 +17,7 @@ exports.getMe = (req, res, next) => {
 	next();
 };
 exports.updateMe = catchAsync(async (req, res, next) => {
+	console.log('This is req.body:', req.body);
 	// STEP 00: Perform Sanitization
 	// const { email, password } = req.body;	// This method is not scalable
 	const filteredBody = filterObj(

@@ -1,4 +1,6 @@
 // IMPORTS
+const path = require('path');
+const cookieParser = require('cookie-parser');
 const express = require('express');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
@@ -12,9 +14,14 @@ const globalErrorHandler = require('./controllers/errorController');
 const tourRouter = require('./routes/tourRoutes');
 const userRouter = require('./routes/userRoutes');
 const reviewRouter = require('./routes/reviewRoutes');
+const viewRouter = require('./routes/viewRoutes');
 
 // CONSTANTS
 const app = express();
+
+// TEMPLATE ENGINE
+app.set('view engine', 'pug');
+app.set('views', path.join(__dirname, 'views')); // default
 
 // MIDDLEWARE(s)
 // Development Logging
@@ -35,6 +42,12 @@ app.use('/api/v1', limiter); // Apply to all routes that start with /api
 
 // Body Parser, reading data from body into req.body
 app.use(express.json({ limit: '10kb' })); // Body size limit
+// For parsing data from forms (urlencoded)
+app.use(
+	express.urlencoded({ extended: true, limit: '10kb' }),
+);
+// Parses data from cookie
+app.use(cookieParser());
 
 // Data Sanitization against NoSQL query injection
 app.use(mongoSanitize());
@@ -60,7 +73,7 @@ app.use(
 );
 
 // Serving Static Files
-app.use(express.static(`${__dirname}/public`));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Test Middleware
 app.use((req, res, next) => {
@@ -69,6 +82,7 @@ app.use((req, res, next) => {
 });
 
 // ROUTE(s)
+app.use('/', viewRouter);
 app.use('/api/v1/tours', tourRouter);
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/reviews', reviewRouter);
