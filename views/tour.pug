@@ -3,7 +3,7 @@ extends base
 include _reviewCard
 
 block append scripts
-    script(src='/js/mapbox.js')
+    //- stripe-buy-button(buy-button-id='{{BUY_BUTTON_ID}}' publishable-key="pk_test_51ObQ3vDfGS01RAJMip5sY2E4KM0AtsaSSqAk9vkplJXACgHJAHX94dlblMonn5fC4ZVHtXPv0RdAQvQKXArfg2SG005NjoZOPP")
 
 mixin overviewBox(label, text, icon)
     .overview-box__detail
@@ -83,4 +83,7 @@ block content
             .cta__content
                 h2.heading-secondary What are you waiting for?
                 p.cta__text #{tour.duration} days. 1 adventure. Infinite memories. Make it yours today!
-                button.btn.btn--green.span-all-rows Book tour now!
+                if user
+                    button.btn.btn--green.span-all-rows.checkout-btn(data-tour-id=tour.id) Book tour now!
+                else
+                    a.btn.btn--green.span-all-rows(href="/login") Login to book tour now!

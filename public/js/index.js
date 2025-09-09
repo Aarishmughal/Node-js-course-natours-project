@@ -2,6 +2,7 @@
 import '@babel/polyfill';
 import { login, logout } from './login.js';
 import { updateSettings } from './updateSettings.js';
+import { bookTour } from './bookTour.js';
 
 // DOM ELEMENTS
 const loginForm = document.querySelector('.form--login');
@@ -14,6 +15,7 @@ const userDataForm = document.querySelector(
 const userSettingsForm = document.querySelector(
 	'.form--user-settings',
 );
+const checkoutBtn = document.querySelector('.checkout-btn');
 
 // VALUES
 
@@ -34,10 +36,21 @@ if (userDataForm)
 		document.querySelector(
 			'.btn--save-settings',
 		).textContent = 'Updating...';
-		const email =
-			document.getElementById('email').value;
-		const name = document.getElementById('name').value;
-		await updateSettings({ name, email }, 'data');
+		const formData = new FormData();
+		formData.append(
+			'name',
+			document.getElementById('name').value,
+		);
+		formData.append(
+			'email',
+			document.getElementById('email').value,
+		);
+		formData.append(
+			'photo',
+			document.getElementById('photo').files[0],
+		);
+		console.log(formData);
+		await updateSettings(formData, 'data');
 	});
 if (userSettingsForm)
 	userSettingsForm.addEventListener(
@@ -76,3 +89,9 @@ if (userSettingsForm)
 			).value = '';
 		},
 	);
+if (checkoutBtn)
+	checkoutBtn.addEventListener('click', async (e) => {
+		e.target.textContent = 'Processing...';
+		const tourId = e.target.dataset.tourId;
+		bookTour(tourId);
+	});

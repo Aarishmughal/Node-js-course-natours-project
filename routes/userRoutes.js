@@ -31,7 +31,12 @@ router.patch(
 	authController.updatePassword,
 );
 
-router.patch('/updateMe', userController.updateMe);
+router.patch(
+	'/updateMe',
+	userController.uploadUserPhoto,
+	userController.resizeUserPhoto,
+	userController.updateMe,
+);
 router.delete('/deleteMe', userController.deleteMe);
 
 // ONLY ADMIN CAN ACCESS THE ROUTES THAT COME AFTER THIS MIDDLEWARE
